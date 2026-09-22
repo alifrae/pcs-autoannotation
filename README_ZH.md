@@ -18,6 +18,8 @@
 
 **图片/视频扔进去 → YOLO 模型训出来**，基于 LocateAnything-3B 的 VLM 自动标注 + SAM2.1 / SAM3 mask 精修 + 人工闭环修正。多格式数据集导入导出、训练任务队列、一键 YOLO 训练（检测 & 分割）、视频关键帧提取、模型验证——macOS MPS / Windows & Linux CUDA 全链路 GPU 加速。
 
+如果这个项目对你有帮助，欢迎点个 ⭐ [Star](https://github.com/Somnusochi/VLM-AutoYOLO)。我正在寻找新的工作机会，欢迎联系：somnusochi@gmail.com
+
 ![业务流程](docs/architecture_zh.webp)
 
 > 详细 Mermaid 图表请查看 [架构与流程文档](docs/architecture_diagram.md)
@@ -372,7 +374,3 @@ python -m compileall app alembic
 第三方依赖协议：
 - LocateAnything-3B 模型 — [NVIDIA License](https://huggingface.co/nvidia/LocateAnything-3B/blob/main/LICENSE)（非商用）
 - Ultralytics YOLO — [AGPL-3.0](https://github.com/ultralytics/ultralytics/blob/main/LICENSE)（copyleft，训练/部署可能触发开源义务）
-
----
-
-如果这个项目对你有帮助，欢迎点个 ⭐ [Star](https://github.com/Somnusochi/VLM-AutoYOLO)。我正在寻找新的工作机会，欢迎联系：somnusochi@gmail.com
