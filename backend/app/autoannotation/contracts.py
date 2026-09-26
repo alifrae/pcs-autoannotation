@@ -51,7 +51,7 @@ class CameraFrame:
 @dataclass(frozen=True, slots=True)
 class AdmaSample:
     timestamp_ns: int
-    values: Mapping[str, float | int | str]
+    values: Mapping[str, Any]
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
