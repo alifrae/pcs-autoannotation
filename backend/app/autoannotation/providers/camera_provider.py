@@ -92,7 +92,7 @@ class LocateAnythingSam2Provider:
                     (
                         f"{sample.sample_id}|{self.identity.provider_id}|"
                         f"{index}|{box.get('class_name', '')}"
-                    ).encode("utf-8")
+                    ).encode()
                 ).hexdigest()[:24]
                 proposals.append(
                     ObjectProposal(
@@ -165,10 +165,11 @@ def camera_frame_to_pil(frame: CameraFrame) -> Image.Image:
             )
         pixels = raw.reshape(frame.height, frame.width, channel_count)
         if swap_rb:
-            if channel_count == 3:
-                pixels = pixels[:, :, [2, 1, 0]]
-            else:
-                pixels = pixels[:, :, [2, 1, 0, 3]]
+            pixels = (
+                pixels[:, :, [2, 1, 0]]
+                if channel_count == 3
+                else pixels[:, :, [2, 1, 0, 3]]
+            )
         if drop_alpha:
             pixels = pixels[:, :, :3]
         return Image.fromarray(np.ascontiguousarray(pixels), mode="RGB")
