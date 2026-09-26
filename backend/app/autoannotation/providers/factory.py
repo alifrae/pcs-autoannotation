@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -83,10 +84,22 @@ def create_innov3_provider(
 
 def create_camera_provider(
     config: Settings = settings,
+    *,
+    categories: Sequence[str] | None = None,
+    use_sam2: bool | None = None,
+    sam2_score_threshold: float | None = None,
 ) -> LocateAnythingSam2Provider:
     return LocateAnythingSam2Provider(
-        categories=config.autoannotation_camera_categories,
-        use_sam2=config.autoannotation_camera_use_sam2,
-        sam2_score_threshold=config.autoannotation_sam2_score_threshold,
+        categories=categories or config.autoannotation_camera_categories,
+        use_sam2=(
+            config.autoannotation_camera_use_sam2
+            if use_sam2 is None
+            else use_sam2
+        ),
+        sam2_score_threshold=(
+            config.autoannotation_sam2_score_threshold
+            if sam2_score_threshold is None
+            else sam2_score_threshold
+        ),
         release_vlm_before_sam2=config.autoannotation_camera_release_vlm_before_sam2,
     )
