@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 from fastapi import APIRouter
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from ...autoannotation.association import load_pcs_calibration
@@ -16,6 +18,7 @@ from ...autoannotation.pcs_scene_objects import (
     write_pcs_scene_object_document,
 )
 from ...autoannotation.pipeline import run_autoannotation_sample
+from ...autoannotation.providers.camera_provider import camera_frame_to_pil
 from ...autoannotation.providers.factory import (
     create_camera_provider,
     create_innov3_provider,
@@ -46,6 +49,12 @@ class DatInnov3Request(DatPathRequest):
     lidar_stream_name: str | None = None
     camera_stream_name: str | None = None
     adma_stream_name: str | None = None
+
+
+class DatCameraProposalRequest(DatInnov3Request):
+    categories: list[str] = Field(default_factory=lambda: ["car", "truck"], min_length=1)
+    use_sam2: bool = True
+    sam2_score_threshold: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
 class DatAutoAnnotationRequest(DatInnov3Request):
@@ -203,8 +212,45 @@ def dat_innov3_proposals(request: DatInnov3Request) -> dict:
     }
 
 
+@router.post("/dat/camera-frame")
+def dat_camera_frame(request: DatInnov3Request) -> Response:
+    """Return the synchronized PCS-native camera frame as browser-safe PNG."""
+
+    try:
+        source = PcsNativeDatSource(Path(request.path))
+        lidar = source.decode_lidar_frame(
+            request.lidar_index,
+            stream_name=request.lidar_stream_name,
+        )
+        camera = source.get_camera_frame_nearest(
+            lidar.timestamp_ns,
+            stream_name=request.camera_stream_name,
+        )
+        image = camera_frame_to_pil(camera)
+        try:
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+        finally:
+            image.close()
+    except FileNotFoundError as exc:
+        raise AppError(str(exc), 404) from exc
+    except PcsNativeUnavailableError as exc:
+        raise AppError(str(exc), 503) from exc
+    except (LookupError, ValueError, IndexError) as exc:
+        raise AppError(str(exc), 422) from exc
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="image/png",
+        headers={
+            "X-PCS-Camera-Timestamp-Ns": str(camera.timestamp_ns),
+            "X-PCS-Camera-Source": camera.source_id,
+        },
+    )
+
+
 @router.post("/dat/camera-proposals")
-def dat_camera_proposals(request: DatInnov3Request) -> dict:
+def dat_camera_proposals(request: DatCameraProposalRequest) -> dict:
     """Run the configured LocateAnything/SAM2 baseline on one PCS-native camera frame."""
 
     try:
@@ -216,7 +262,11 @@ def dat_camera_proposals(request: DatInnov3Request) -> dict:
             adma_stream_name=request.adma_stream_name,
             require_adma=True,
         )
-        provider = create_camera_provider()
+        provider = create_camera_provider(
+            categories=request.categories,
+            use_sam2=request.use_sam2,
+            sam2_score_threshold=request.sam2_score_threshold,
+        )
         proposals = provider.infer(sample)
     except FileNotFoundError as exc:
         raise AppError(str(exc), 404) from exc
