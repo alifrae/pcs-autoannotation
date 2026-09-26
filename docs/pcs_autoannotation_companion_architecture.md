@@ -78,6 +78,18 @@ The artifact provenance contract is `pcs-native-manifest.json` with schema
 `pcs-native-artifact/v1`. It records the PCS repository/commit, native module
 version, Python ABI/platform, enabled features, wheel name and SHA-256.
 
+Install the dependency from a PCS-generated wheel and manifest:
+
+```bash
+cd backend
+PYTHONPATH=. python scripts/install_pcs_native.py \
+  --wheel /path/to/point_cloud_studio_native-*.whl \
+  --manifest /path/to/pcs-native-manifest.json
+```
+
+The installer verifies the wheel SHA-256 before installation and validates the
+installed module against the manifest afterward.
+
 A missing native capability is a PCS-native integration gap. It must not be
 worked around by introducing a second protocol implementation in this repository.
 
@@ -187,6 +199,12 @@ The provider must not contain DAT/IFSCAN handling.
 
 The exact checkpoint, preprocessing contract, class mapping and checkpoint
 SHA-256 must be recorded. No fine-tuning is part of the initial baseline.
+
+The input adapter is now implemented in
+`backend/app/autoannotation/providers/innov3_dsvt.py`. It pins the existing
+internal Innov3 contract and checkpoint SHA-256. The OpenPCDet/DSVT inference
+runtime is not yet connected, so Innov3 must not yet be reported as an executing
+annotation provider.
 
 ## Camera–LiDAR association
 
