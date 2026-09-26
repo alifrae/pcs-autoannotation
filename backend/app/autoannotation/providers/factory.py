@@ -91,11 +91,7 @@ def create_camera_provider(
 ) -> LocateAnythingSam2Provider:
     return LocateAnythingSam2Provider(
         categories=categories or config.autoannotation_camera_categories,
-        use_sam2=(
-            config.autoannotation_camera_use_sam2
-            if use_sam2 is None
-            else use_sam2
-        ),
+        use_sam2=(config.autoannotation_camera_use_sam2 if use_sam2 is None else use_sam2),
         sam2_score_threshold=(
             config.autoannotation_sam2_score_threshold
             if sam2_score_threshold is None
