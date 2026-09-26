@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from ...core.config import Settings, settings
+from .innov3_openpcdet_runtime import Innov3OpenPcdetRuntime
+from .innov3_provider import Innov3DsvtProvider
+
+
+@dataclass(frozen=True, slots=True)
+class Innov3ConfigurationStatus:
+    configured: bool
+    dsvt_root: str | None
+    config_path: str | None
+    checkpoint_path: str | None
+    device: str
+    housing_merged: bool | None
+    missing: tuple[str, ...]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "configured": self.configured,
+            "dsvt_root": self.dsvt_root,
+            "config_path": self.config_path,
+            "checkpoint_path": self.checkpoint_path,
+            "device": self.device,
+            "housing_merged": self.housing_merged,
+            "missing": list(self.missing),
+        }
+
+
+def inspect_innov3_configuration(
+    config: Settings = settings,
+) -> Innov3ConfigurationStatus:
+    missing: list[str] = []
+    if not config.innov3_dsvt_root:
+        missing.append("INNOV3_DSVT_ROOT")
+    if not config.innov3_config_path:
+        missing.append("INNOV3_CONFIG_PATH")
+    if not config.innov3_checkpoint_path:
+        missing.append("INNOV3_CHECKPOINT_PATH")
+    if config.innov3_housing_merged is None:
+        missing.append("INNOV3_HOUSING_MERGED")
+
+    return Innov3ConfigurationStatus(
+        configured=not missing,
+        dsvt_root=config.innov3_dsvt_root or None,
+        config_path=config.innov3_config_path or None,
+        checkpoint_path=config.innov3_checkpoint_path or None,
+        device=config.innov3_device,
+        housing_merged=config.innov3_housing_merged,
+        missing=tuple(missing),
+    )
+
+
+def create_innov3_provider(
+    config: Settings = settings,
+) -> Innov3DsvtProvider:
+    status = inspect_innov3_configuration(config)
+    if not status.configured:
+        raise RuntimeError(
+            "Innov3 is not configured. Missing: " + ", ".join(status.missing)
+        )
+
+    runtime = Innov3OpenPcdetRuntime(
+        config_pickle=Path(config.innov3_config_path),
+        checkpoint=Path(config.innov3_checkpoint_path),
+        dsvt_root=Path(config.innov3_dsvt_root),
+        device=config.innov3_device,
+    )
+    assert config.innov3_housing_merged is not None
+    return Innov3DsvtProvider(
+        runtime=runtime,
+        housing_merged=config.innov3_housing_merged,
+    )
