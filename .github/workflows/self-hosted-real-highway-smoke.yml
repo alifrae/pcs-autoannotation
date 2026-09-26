@@ -1,0 +1,319 @@
+name: PCS Auto-Annotation Real Highway Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/multimodal-v1-foundation
+    paths:
+      - ".github/workflows/self-hosted-real-highway-smoke.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: pcs-autoannotation-real-highway-smoke
+  cancel-in-progress: true
+
+jobs:
+  real-highway-smoke:
+    name: Highway DAT multimodal smoke
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
+    env:
+      PCS_REPOSITORY: alifrae/cb574_point_cloud_sil
+      PCS_COMMIT: aec3a119e1017be8dcf10924284b5334bd6038dc
+      PCS_ARTIFACT_ID: "10902590443"
+      LIDAR_LAB_REPOSITORY: sceneworks-labs/lidar-perception-lab
+      LIDAR_LAB_CONFIG_REF: feat/internal-dsvt-reference-adapter
+
+    steps:
+      - name: Checkout companion
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve workstation infrastructure
+        shell: bash
+        run: |
+          set -euo pipefail
+          INFRA_DIR="$RUNNER_TEMP/lidar-lab-infra"
+          rm -rf "$INFRA_DIR"
+          git clone --depth 1 --branch "$LIDAR_LAB_CONFIG_REF"             "https://github.com/$LIDAR_LAB_REPOSITORY.git" "$INFRA_DIR"
+
+          set -a
+          source "$INFRA_DIR/configs/self-hosted-linux.env"
+          set +a
+
+          TRACE_PATH="$TRACE_CATALOG_ROOT/$HIGHWAY_TRACE_REL"
+          DECODER_PYTHON="$LIDAR_LAB_DATA_ROOT/runtime/decoder-cp312/bin/python"
+          ML_PYTHON="$LIDAR_LAB_DATA_ROOT/runtime/dsvt-py311-cu124/bin/python"
+          CONFIG_PATH="$LIDAR_LAB_DATA_ROOT/models/internal-dsvt/internal_config.pkl"
+          CHECKPOINT_PATH="$LIDAR_LAB_DATA_ROOT/models/internal-dsvt/innov3_dsvt_weights.pt"
+
+          test -f "$TRACE_PATH"
+          test -x "$DECODER_PYTHON"
+          test -x "$ML_PYTHON"
+          test -d "$LIDAR_LAB_DSVT_ROOT"
+          test -f "$CONFIG_PATH"
+          test -f "$CHECKPOINT_PATH"
+
+          {
+            echo "TRACE_PATH=$TRACE_PATH"
+            echo "DECODER_PYTHON=$DECODER_PYTHON"
+            echo "ML_PYTHON=$ML_PYTHON"
+            echo "LIDAR_LAB_DATA_ROOT=$LIDAR_LAB_DATA_ROOT"
+            echo "LIDAR_LAB_DSVT_ROOT=$LIDAR_LAB_DSVT_ROOT"
+            echo "CONFIG_PATH=$CONFIG_PATH"
+            echo "CHECKPOINT_PATH=$CHECKPOINT_PATH"
+          } >> "$GITHUB_ENV"
+
+          echo "trace_path=$TRACE_PATH"
+          echo "decoder_python=$DECODER_PYTHON"
+          echo "ml_python=$ML_PYTHON"
+          sha256sum "$CHECKPOINT_PATH"
+          nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
+
+      - name: Acquire exact PCS native wheel
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }
+        run: |
+          set -euo pipefail
+          NATIVE_DIR="$RUNNER_TEMP/pcs-native-autoannotation"
+          rm -rf "$NATIVE_DIR"
+          mkdir -p "$NATIVE_DIR"
+
+          artifact_ok=false
+          if command -v curl >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1; then
+            if curl --fail --location --silent --show-error               -H "Authorization: Bearer $GH_TOKEN"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/$PCS_REPOSITORY/actions/artifacts/$PCS_ARTIFACT_ID/zip"               -o "$NATIVE_DIR/native.zip"; then
+              if unzip -t "$NATIVE_DIR/native.zip" >/dev/null 2>&1; then
+                unzip -q "$NATIVE_DIR/native.zip" -d "$NATIVE_DIR/artifact"
+                artifact_ok=true
+              fi
+            fi
+          fi
+
+          if [[ "$artifact_ok" != "true" ]]; then
+            echo "Qualified artifact download unavailable; building exact PCS commit locally."
+            PCS_SOURCE="$RUNNER_TEMP/pcs-native-source"
+            rm -rf "$PCS_SOURCE"
+            git init "$PCS_SOURCE"
+            git -C "$PCS_SOURCE" remote add origin "https://github.com/$PCS_REPOSITORY.git"
+            git -C "$PCS_SOURCE" fetch --depth 1 origin "$PCS_COMMIT"
+            git -C "$PCS_SOURCE" checkout --detach FETCH_HEAD
+
+            python -m pip install --quiet --upgrade pip maturin
+            mkdir -p "$NATIVE_DIR/artifact"
+            (
+              cd "$PCS_SOURCE/bindings"
+              python -m maturin build                 --profile native-release                 --locked                 --strip                 --out "$NATIVE_DIR/artifact"                 --interpreter python                 --no-default-features                 --features extension-module,transport
+            )
+          fi
+
+          WHEEL="$(find "$NATIVE_DIR/artifact" -type f -name '*.whl' -print -quit)"
+          test -n "$WHEEL"
+          echo "PCS_NATIVE_WHEEL_REAL=$WHEEL" >> "$GITHUB_ENV"
+          echo "native_wheel=$WHEEL"
+
+          MANIFEST="$(find "$NATIVE_DIR/artifact" -type f -name 'pcs-native-manifest.json' -print -quit || true)"
+          if [[ -n "$MANIFEST" ]]; then
+            MANIFEST="$MANIFEST" PCS_COMMIT="$PCS_COMMIT" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = json.loads(Path(os.environ["MANIFEST"]).read_text())
+          expected = os.environ["PCS_COMMIT"]
+          actual = str(manifest.get("pcs_commit", ""))
+          if actual != expected:
+              raise SystemExit(f"PCS artifact commit mismatch: expected={expected} actual={actual}")
+          print(f"pcs_manifest_commit={actual}")
+          print(f"pcs_manifest_version={manifest.get('version')}")
+          print(f"pcs_manifest_sha256={manifest.get('wheel_sha256')}")
+          PY
+          fi
+
+      - name: Install PCS native into decoder runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$DECODER_PYTHON" -m pip install --quiet --force-reinstall "$PCS_NATIVE_WHEEL_REAL"
+          "$DECODER_PYTHON" - <<'PY'
+          import point_cloud_studio_native as native
+
+          assert hasattr(native.transport, "NativeDatReader")
+          assert hasattr(native.transport, "NativeDatImageStreamSource")
+          assert hasattr(native.transport, "NativeDatAdmaStreamSource")
+          assert hasattr(native.codec, "decode_ifscan_payload")
+          print("pcs_native_version=", native.__version__)
+          print("pcs_native_profile=", native.__build_profile__)
+          print("pcs_native_features=", native.__build_features__)
+          PY
+
+      - name: Decode real Highway synchronized samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/highway-smoke
+          PYTHONPATH="$GITHUB_WORKSPACE/backend" "$DECODER_PYTHON" - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from pathlib import Path
+
+          import numpy as np
+
+          from app.autoannotation.pcs_native_dat_source import PcsNativeDatSource
+          from app.autoannotation.providers.innov3_dsvt import prepare_innov3_input
+
+          source = PcsNativeDatSource(Path(os.environ["TRACE_PATH"]))
+          inspection = source.inspect()
+          print(json.dumps(inspection.as_dict(), indent=2))
+
+          lidar_stream = inspection.lidar_streams[0]
+          lidar_info = next(s for s in inspection.streams if s.name == lidar_stream)
+          indices = sorted({0, lidar_info.frame_count // 2, lidar_info.frame_count - 1})
+
+          summaries = []
+          prepared_path = Path("artifacts/highway-smoke/innov3-input.npz")
+          for n, index in enumerate(indices):
+              sample = source.build_synchronized_sample(index)
+              summary = {
+                  "index": index,
+                  "sample_id": sample.sample_id,
+                  "lidar_timestamp_ns": sample.lidar.timestamp_ns,
+                  "point_count": int(sample.lidar.points.shape[0]),
+                  "num_echoes": sample.lidar.metadata.get("num_echoes"),
+                  "camera_timestamp_ns": sample.camera.timestamp_ns,
+                  "camera_sync_delta_ns": sample.camera.metadata.get("sync_delta_ns"),
+                  "adma_timestamp_ns": sample.adma.timestamp_ns if sample.adma else None,
+                  "adma_sync_delta_ns": (
+                      sample.adma.metadata.get("sync_delta_ns") if sample.adma else None
+                  ),
+                  "adma_sync_status": (
+                      sample.adma.metadata.get("sync_status") if sample.adma else None
+                  ),
+              }
+              summaries.append(summary)
+              print(json.dumps(summary, sort_keys=True))
+
+              if n == 0:
+                  prepared = prepare_innov3_input(
+                      sample.lidar,
+                      housing_merged=True,
+                  )
+                  np.savez_compressed(
+                      prepared_path,
+                      points_xyzi=prepared.points_xyzi,
+                      source_indices=prepared.source_indices,
+                      sample_id=np.asarray(sample.sample_id),
+                      semantic_echo_id=np.asarray(prepared.semantic_echo_id),
+                  )
+                  Path("artifacts/highway-smoke/camera-frame.bin").write_bytes(
+                      sample.camera.data
+                  )
+                  Path("artifacts/highway-smoke/camera-meta.json").write_text(
+                      json.dumps(
+                          {
+                              "width": sample.camera.width,
+                              "height": sample.camera.height,
+                              "encoding": sample.camera.encoding,
+                              "timestamp_ns": sample.camera.timestamp_ns,
+                              "source_id": sample.camera.source_id,
+                          },
+                          indent=2,
+                      )
+                  )
+
+          Path("artifacts/highway-smoke/synchronized-samples.json").write_text(
+              json.dumps(summaries, indent=2)
+          )
+          assert all(abs(int(s["adma_sync_delta_ns"])) <= 20_000_000 for s in summaries)
+          assert all(int(s["point_count"]) > 0 for s in summaries)
+          print("highway_multimodal_decode=PASS")
+          PY
+
+      - name: Run Innov3 on real Highway frame
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CUDA_HOME="$LIDAR_LAB_DATA_ROOT/runtime/cuda-12.4.1"
+          export PATH="$LIDAR_LAB_DATA_ROOT/runtime/dsvt-py311-cu124/bin:$CUDA_HOME/bin:$PATH"
+          export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${{LD_LIBRARY_PATH:-}"
+
+          PYTHONPATH="$GITHUB_WORKSPACE/backend" "$ML_PYTHON" - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from pathlib import Path
+
+          import numpy as np
+
+          from app.autoannotation.providers.innov3_openpcdet_runtime import (
+              Innov3OpenPcdetRuntime,
+          )
+
+          data = np.load("artifacts/highway-smoke/innov3-input.npz")
+          sample_id = str(data["sample_id"].item())
+          runtime = Innov3OpenPcdetRuntime(
+              config_pickle=Path(os.environ["CONFIG_PATH"]),
+              checkpoint=Path(os.environ["CHECKPOINT_PATH"]),
+              dsvt_root=Path(os.environ["LIDAR_LAB_DSVT_ROOT"]),
+              device="cuda",
+          )
+          result = runtime.infer(
+              np.asarray(data["points_xyzi"], dtype=np.float32),
+              sample_id=sample_id,
+          )
+          payload = {
+              "sample_id": sample_id,
+              "detection_count": int(result.boxes.shape[0]),
+              "boxes": result.boxes.tolist(),
+              "scores": result.scores.tolist(),
+              "labels": result.labels.tolist(),
+          }
+          Path("artifacts/highway-smoke/innov3-result.json").write_text(
+              json.dumps(payload, indent=2)
+          )
+          print(json.dumps({
+              "sample_id": sample_id,
+              "detection_count": payload["detection_count"],
+              "scores": payload["scores"][:10],
+              "labels": payload["labels"][:10],
+          }, indent=2))
+          print("innov3_real_highway_execution=PASS")
+          PY
+
+      - name: Probe LocateAnything and SAM2 workstation readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+
+          modules = {
+              name: importlib.util.find_spec(name) is not None
+              for name in ("torch", "transformers", "sam2")
+          }
+          print("camera_python_modules=", modules)
+          cache = Path.home() / ".cache" / "huggingface" / "hub" / "models--nvidia--LocateAnything-3B"
+          print("locateanything_cache_present=", cache.exists())
+          print("camera_runtime_ready=", all(modules.values()) and cache.exists())
+          PY
+
+      - name: Upload Highway smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcs-autoannotation-highway-smoke-${{ github.run_id }
+          path: artifacts/highway-smoke/
+          if-no-files-found: warn
+          retention-days: 30
