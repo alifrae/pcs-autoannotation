@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 
 from .contracts import AdmaSample, CameraFrame, LidarFrame, SynchronizedSample
-from .pcs_native_runtime import PcsNativeUnavailable, require_pcs_native
+from .pcs_native_runtime import PcsNativeUnavailableError, require_pcs_native
 
 DEFAULT_ADMA_SYNC_TOLERANCE_NS = 20_000_000
 
@@ -294,7 +294,7 @@ class PcsNativeDatSource:
     def _single_stream_name(self, kind: str) -> str:
         names = [stream.name for stream in self._streams if stream.kind == kind]
         if not names:
-            raise PcsNativeUnavailable(
+            raise PcsNativeUnavailableError(
                 f"DAT contains no PCS-native stream of kind {kind!r}: {self.path}"
             )
         if len(names) > 1:
