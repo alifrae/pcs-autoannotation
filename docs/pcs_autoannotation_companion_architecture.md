@@ -274,17 +274,23 @@ annotation trustworthiness.
 - replacement of PCS visualization or decoding;
 - migration of LiDAR Perception Lab into this repository.
 
-## Current implementation order
+## Capability status
 
-The implementation is tracked using explicit capability names rather than
-numbered work packages or roadmap phases:
+- **PCS Native DAT Ingestion — implemented foundation.** Native runtime probing,
+  DAT stream inspection, LiDAR decode, nearest camera retrieval and native-wheel
+  verification/install support are present.
+- **Synchronized Sensor Sample — partially implemented.** LiDAR and camera are
+  synchronized by native timestamps. ADMA remains blocked on the parallel PCS
+  native extension.
+- **Innov3 DSVT LiDAR Proposals — input contract implemented.** The frozen
+  Innov3 preprocessing contract and checkpoint identity are present. The
+  OpenPCDet runtime is not connected yet.
+- **LocateAnything/SAM2 Camera Provider — existing engine available, companion
+  adapter pending.**
+- **Camera–LiDAR Association — pending.**
+- **PCS Review and Correction — pending.**
+- **Auto-Annotation Baseline Qualification — pending.**
 
-1. **PCS Native DAT Ingestion**
-2. **Synchronized Sensor Sample**
-3. **Innov3 DSVT LiDAR Proposals**
-4. **LocateAnything/SAM2 Camera Provider**
-5. **Camera–LiDAR Association**
-6. **PCS Review and Correction**
-7. **Auto-Annotation Baseline Qualification**
-
-These names should remain stable even if scheduling or priority changes.
+These explicit capability names are the tracking vocabulary for this repository.
+Scheduling changes must update status under the same names rather than inventing
+new numbered labels.
