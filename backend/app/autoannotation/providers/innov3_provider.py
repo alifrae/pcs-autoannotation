@@ -24,17 +24,13 @@ from .innov3_dsvt import (
 @dataclass(slots=True)
 class Innov3DsvtProvider:
     runtime: Innov3InferenceRuntime
-    housing_merged: bool
 
     @property
     def identity(self):
         return innov3_identity()
 
     def infer(self, sample: SynchronizedSample) -> Sequence[ObjectProposal]:
-        prepared = prepare_innov3_input(
-            sample.lidar,
-            housing_merged=self.housing_merged,
-        )
+        prepared = prepare_innov3_input(sample.lidar)
         raw = self.runtime.infer(prepared.points_xyzi, sample_id=sample.sample_id)
 
         proposals: list[ObjectProposal] = []
