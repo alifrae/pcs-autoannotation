@@ -5,10 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from ...autoannotation.pcs_native_dat_source import (
-    PcsNativeCapabilityError,
-    PcsNativeDatSource,
-)
+from ...autoannotation.pcs_native_dat_source import PcsNativeDatSource
 from ...autoannotation.pcs_native_runtime import (
     PcsNativeUnavailable,
     inspect_pcs_native,
@@ -31,6 +28,7 @@ class DatSampleSummaryRequest(DatPathRequest):
     lidar_index: int = Field(default=0, ge=0)
     lidar_stream_name: str | None = None
     camera_stream_name: str | None = None
+    adma_stream_name: str | None = None
     require_adma: bool = True
 
 
@@ -38,6 +36,7 @@ class DatInnov3Request(DatPathRequest):
     lidar_index: int = Field(default=0, ge=0)
     lidar_stream_name: str | None = None
     camera_stream_name: str | None = None
+    adma_stream_name: str | None = None
 
 
 @router.get("/pcs-native/status")
@@ -76,11 +75,12 @@ def dat_sample_summary(request: DatSampleSummaryRequest) -> dict:
             request.lidar_index,
             lidar_stream_name=request.lidar_stream_name,
             camera_stream_name=request.camera_stream_name,
+            adma_stream_name=request.adma_stream_name,
             require_adma=request.require_adma,
         )
     except FileNotFoundError as exc:
         raise AppError(f"DAT file not found: {request.path}", 404) from exc
-    except (PcsNativeUnavailable, PcsNativeCapabilityError) as exc:
+    except PcsNativeUnavailable as exc:
         raise AppError(str(exc), 503) from exc
     except (LookupError, ValueError, IndexError) as exc:
         raise AppError(str(exc), 422) from exc
@@ -101,19 +101,24 @@ def dat_sample_summary(request: DatSampleSummaryRequest) -> dict:
             "source_id": sample.camera.source_id,
             "sync_delta_ns": sample.camera.metadata.get("sync_delta_ns"),
         },
-        "adma": None if sample.adma is None else dict(sample.adma.values),
+        "adma": (
+            None
+            if sample.adma is None
+            else {
+                "timestamp_ns": sample.adma.timestamp_ns,
+                "sync_delta_ns": sample.adma.metadata.get("sync_delta_ns"),
+                "sample_index": sample.adma.metadata.get("sample_index"),
+                "stream_name": sample.adma.metadata.get("stream_name"),
+                "values": dict(sample.adma.values),
+            }
+        ),
         "source_metadata": dict(sample.source_metadata),
     }
 
 
 @router.post("/dat/innov3-proposals")
 def dat_innov3_proposals(request: DatInnov3Request) -> dict:
-    """Run Innov3 on one PCS-native DAT sample.
-
-    ADMA is not required for the LiDAR model execution itself. The complete
-    auto-annotation baseline remains blocked until the PCS-native ADMA source is
-    available.
-    """
+    """Run Innov3 on one complete PCS-native DAT sample."""
 
     try:
         source = PcsNativeDatSource(Path(request.path))
@@ -121,13 +126,14 @@ def dat_innov3_proposals(request: DatInnov3Request) -> dict:
             request.lidar_index,
             lidar_stream_name=request.lidar_stream_name,
             camera_stream_name=request.camera_stream_name,
-            require_adma=False,
+            adma_stream_name=request.adma_stream_name,
+            require_adma=True,
         )
         provider = create_innov3_provider()
         proposals = provider.infer(sample)
     except FileNotFoundError as exc:
         raise AppError(str(exc), 404) from exc
-    except (PcsNativeUnavailable, PcsNativeCapabilityError) as exc:
+    except PcsNativeUnavailable as exc:
         raise AppError(str(exc), 503) from exc
     except RuntimeError as exc:
         raise AppError(str(exc), 503) from exc
@@ -183,7 +189,8 @@ def dat_camera_proposals(request: DatInnov3Request) -> dict:
             request.lidar_index,
             lidar_stream_name=request.lidar_stream_name,
             camera_stream_name=request.camera_stream_name,
-            require_adma=False,
+            adma_stream_name=request.adma_stream_name,
+            require_adma=True,
         )
         provider = create_camera_provider()
         proposals = provider.infer(sample)
