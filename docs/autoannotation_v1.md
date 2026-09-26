@@ -30,13 +30,16 @@ The v1 success criterion is not maximum model accuracy. It is whether the pipeli
 1. Keep this repository independent from Point Cloud Studio and lidar-perception-lab.
 2. Reuse the existing VLM-AutoYOLO application shell: React UI, FastAPI backend, persistence, model lifecycle, batch/job infrastructure, and existing camera AI.
 3. DAT is a first-class source. Do not require manual conversion before ingestion.
-4. DAT decoding and sensor semantics must reuse PCS-compatible decoding behavior rather than introduce a second incompatible interpretation.
-5. Introduce a generic synchronized sample contract so future PCAP/MCAP/OpenX sources can be added without changing downstream model code.
-6. Innov3 DSVT is the frozen v1 LiDAR baseline. No fine-tuning in this PR series.
-7. Keep camera and LiDAR model outputs as independent evidence. Fusion must preserve per-provider confidence and provenance.
-8. PCS remains the authoritative LiDAR inspection/correction environment.
-9. Human decisions never overwrite the original machine proposal.
-10. Avoid introducing additional VLMs or learned fusion until the baseline is measured.
+4. `point_cloud_studio_native` is the sole DAT decoding dependency. This repository must not copy PCS parsers, import PCS GUI/application modules, or reimplement IFSCAN/camera/ADMA binary semantics.
+5. Consume the versioned **headless PCS native wheel** and verify its `pcs-native-manifest.json` (PCS commit, module version, Python ABI/platform, enabled features, wheel filename and SHA-256), following the same external-consumer model used by LiDAR Lab.
+6. LiDAR DAT access uses the native `transport.NativeDatReader` plus native codec surfaces; camera DAT access uses `transport.NativeDatImageStreamSource` / the equivalent active-reader image methods.
+7. ADMA must also come through a supported native-module API. If the current external wheel does not expose typed ADMA samples, extend `point_cloud_studio_native` in PCS first; do **not** add an ADMA parser here.
+8. Introduce a generic synchronized sample contract so future PCAP/MCAP/OpenX sources can be added without changing downstream model code.
+9. Innov3 DSVT is the frozen v1 LiDAR baseline. No fine-tuning in this PR series.
+10. Keep camera and LiDAR model outputs as independent evidence. Fusion must preserve per-provider confidence and provenance.
+11. PCS remains the authoritative LiDAR inspection/correction environment; this tool orchestrates annotation and review but does not duplicate PCS visualization or decoding.
+12. Human decisions never overwrite the original machine proposal.
+13. Avoid introducing additional VLMs or learned fusion until the baseline is measured.
 
 ## Core contracts
 
@@ -79,12 +82,15 @@ The original proposal and provider evidence remain immutable after human review.
 
 ## v1 work packages
 
-### WP1 — Source and sample foundation
-- Add DAT dataset source abstraction.
-- Expose synchronized camera, point cloud, ADMA and metadata as `Sample`.
+### WP1 — PCS native dependency, source and sample foundation
+- Add the versioned `point_cloud_studio_native` headless wheel as the DAT runtime dependency and verify its manifest/checksum.
+- Add a thin DAT dataset adapter over native APIs; no copied PCS decoding code.
+- Use native LiDAR and camera stream APIs to expose synchronized point cloud and camera samples.
+- Verify whether the native wheel already exposes the required ADMA stream contract. If not, open/implement the missing API in PCS native first and consume it here afterward.
+- Expose synchronized camera, point cloud, ADMA and metadata as `Sample` only after all three are backed by native authority.
 - Define calibration attachment and timestamp semantics.
 - Add deterministic sample identifiers.
-- Add tests using synthetic fixtures first; real DAT qualification follows once runtime access is available.
+- Add contract tests plus real-DAT qualification.
 
 ### WP2 — Provider abstraction
 - Generalize the current detection strategy into provider-oriented annotation evidence.
@@ -138,7 +144,8 @@ PR1 establishes only the architectural foundation:
 - project v1 contract and documentation;
 - generic `Sample` and annotation/provenance domain contracts;
 - provider interface compatible with existing camera detection paths;
-- DAT source interface/skeleton with no duplicated proprietary decoding logic;
+- PCS-native dependency/manifest contract and a thin DAT adapter over `point_cloud_studio_native`;
+- native capability check for LiDAR, camera and ADMA, with ADMA explicitly blocked rather than locally reimplemented if the wheel lacks the API;
 - test scaffolding for contracts and source/provider boundaries;
 - no DSVT inference yet;
 - no fusion yet;
@@ -150,6 +157,9 @@ PR1 establishes only the architectural foundation:
 - Existing camera detection strategies can be adapted behind the provider abstraction without changing observable behavior.
 - Domain contracts support both 2D and 3D evidence.
 - DAT source boundary is explicit and testable.
+- The auto-annotation repository contains no DAT/IFSCAN/camera/ADMA binary parser.
+- Native wheel identity/checksum is recorded and validated.
+- Missing ADMA native support fails explicitly and points to a PCS-native capability gap; there is no Python fallback parser.
 - No hard-coded echo count, sensor topology, camera resolution or model-specific fields in generic contracts.
 - Provenance is mandatory for machine-generated proposals.
 - Architecture leaves PCS integration and Innov3 DSVT as additive providers/consumers rather than special cases.
