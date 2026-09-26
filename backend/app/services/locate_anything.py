@@ -327,7 +327,6 @@ def parse_boxes(raw_text: str, img_w: int, img_h: int) -> list[dict]:
     """
     boxes: list[dict] = []
     current_class = ""
-    last_conf = None
 
     for token in _TOKEN_PATTERN.findall(raw_text):
         if token.startswith("<ref>"):
@@ -345,17 +344,16 @@ def parse_boxes(raw_text: str, img_w: int, img_h: int) -> list[dict]:
                         "y1": int(y1 / 1000 * img_h),
                         "x2": int(x2 / 1000 * img_w),
                         "y2": int(y2 / 1000 * img_h),
-                        "confidence": last_conf,
+                        "confidence": None,
                     }
                 )
-                last_conf = None
-        elif token.startswith("<conf>"):
+        elif token.startswith("<conf>") and boxes:
             m = _CONF_PATTERN.match(token)
             if m:
                 try:
-                    last_conf = float(m.group(1))
+                    boxes[-1]["confidence"] = float(m.group(1))
                 except ValueError:
-                    last_conf = None
+                    boxes[-1]["confidence"] = None
 
     return boxes
 
@@ -371,7 +369,19 @@ def _get_max_long_side() -> int:
     return _max_long_side
 
 
-def detect(image_path: str | Path, categories: list[str]) -> dict:
+def detect_image(
+    image: Image.Image,
+    categories: list[str],
+    *,
+    source_label: str = "<memory>",
+) -> dict:
+    """Run LocateAnything on an in-memory image.
+
+    The returned boxes remain in the possibly downscaled inference space and
+    include original dimensions so callers can map them back exactly as the
+    existing file-based strategy does.
+    """
+
     try:
         worker = _get_worker()
     except Exception as exc:
@@ -381,19 +391,20 @@ def detect(image_path: str | Path, categories: list[str]) -> dict:
     gpu_mem = get_memory_manager()
     gpu_mem.empty_cache()
 
-    img = Image.open(image_path).convert("RGB")
+    img = image.convert("RGB")
     try:
         orig_w, orig_h = img.size
         w, h = orig_w, orig_h
 
-        # Downscale large images to avoid GPU OOM (ViT attention is quadratic)
         longest = max(w, h)
         cap = _get_max_long_side()
         if longest > cap:
             scale = cap / longest
             new_w, new_h = int(w * scale), int(h * scale)
             logger.info("Resizing image %dx%d -> %dx%d", w, h, new_w, new_h)
-            img = img.resize((new_w, new_h), Image.LANCZOS)
+            resized = img.resize((new_w, new_h), Image.LANCZOS)
+            img.close()
+            img = resized
             w, h = new_w, new_h
 
         try:
@@ -404,8 +415,12 @@ def detect(image_path: str | Path, categories: list[str]) -> dict:
             raise InferenceError(f"Model inference failed: {exc}") from exc
 
         boxes = parse_boxes(raw_text, w, h)
-        logger.info("Detection: %s -> %d boxes for %s", image_path, len(boxes), categories)
-
+        logger.info(
+            "Detection: %s -> %d boxes for %s",
+            source_label,
+            len(boxes),
+            categories,
+        )
         return {
             "raw_text": raw_text,
             "boxes": boxes,
@@ -417,6 +432,18 @@ def detect(image_path: str | Path, categories: list[str]) -> dict:
     finally:
         img.close()
         gpu_mem.full_cleanup()
+
+
+def detect(image_path: str | Path, categories: list[str]) -> dict:
+    # Preserve the existing API contract: model/device loading errors are
+    # reported before file I/O errors. detect_image() reuses the loaded worker.
+    try:
+        _get_worker()
+    except Exception as exc:
+        raise InferenceError(f"Model loading failed: {exc}") from exc
+
+    with Image.open(image_path) as source:
+        return detect_image(source, categories, source_label=str(image_path))
 
 
 def get_model_status() -> dict:

@@ -11,12 +11,14 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .api.routes.autoannotation import router as autoannotation_router
 from .api.routes.detection import router as detection_router
 from .api.routes.export import router as export_router
 from .api.routes.import_dataset import router as import_router
 from .api.routes.predict import router as predict_router
 from .api.routes.train import router as train_router
 from .api.routes.video import router as video_router
+from .autoannotation.pcs_native_runtime import inspect_pcs_native, require_pcs_native
 from .core.config import settings
 from .core.database import init_db
 from .core.exceptions import AppError
@@ -33,6 +35,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
+    if settings.pcs_native_required:
+        require_pcs_native()
     init_db()
 
     # 清理上次意外中断的训练任务
@@ -57,7 +61,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="VLM-AutoYOLO API",
+    title="PCS Auto-Annotation Companion API",
     version="0.1.0",
     lifespan=lifespan,
     default_response_class=JSONResponse,
@@ -112,6 +116,7 @@ async def general_exception_handler(_request: Request, exc: Exception) -> JSONRe
     )
 
 
+app.include_router(autoannotation_router)
 app.include_router(detection_router)
 app.include_router(export_router)
 app.include_router(predict_router)
@@ -122,7 +127,12 @@ app.include_router(video_router)
 
 @app.get("/api/health")
 async def health() -> dict:
-    return {"status": "ok", "version": "0.1.0"}
+    pcs_native = inspect_pcs_native()
+    return {
+        "status": "ok" if pcs_native.available else "degraded",
+        "version": "0.1.0",
+        "pcs_native": pcs_native.as_dict(),
+    }
 
 
 # Mount frontend conditionally (for single-container deployments)

@@ -11,6 +11,7 @@ interface Props {
   hiddenIndices: Set<string>;
   onModeChange: (mode: Mode) => void;
   onDrawBox: (box: { x1: number; y1: number; x2: number; y2: number }) => void;
+  readOnly?: boolean;
 }
 
 export function DetectionCanvas({
@@ -22,6 +23,7 @@ export function DetectionCanvas({
   hiddenIndices,
   onModeChange,
   onDrawBox,
+  readOnly = false,
 }: Props) {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -126,7 +128,7 @@ export function DetectionCanvas({
   };
 
   const onMouseDown = (e: React.MouseEvent) => {
-    if (mode !== "draw") return;
+    if (readOnly || mode !== "draw") return;
     const { x, y } = getPos(e);
     setDrawing({ startX: x, startY: y, currentX: x, currentY: y });
   };
@@ -154,27 +156,31 @@ export function DetectionCanvas({
     <div>
       {/* Mode toggle */}
       <div className="flex items-center gap-3 mb-2 flex-wrap">
-        <label className="flex items-center gap-1 text-xs cursor-pointer">
-          <input
-            type="radio"
-            name="canvas-mode"
-            checked={mode === "view"}
-            onChange={() => onModeChange("view")}
-            className="h-3 w-3"
-          />
-          {t("common.view")}
-        </label>
-        <label className="flex items-center gap-1 text-xs cursor-pointer">
-          <input
-            type="radio"
-            name="canvas-mode"
-            checked={mode === "draw"}
-            onChange={() => onModeChange("draw")}
-            className="h-3 w-3"
-          />
-          {t("common.draw")}
-        </label>
-        <span className="text-gray-300">|</span>
+        {!readOnly && (
+          <>
+            <label className="flex items-center gap-1 text-xs cursor-pointer">
+              <input
+                type="radio"
+                name="canvas-mode"
+                checked={mode === "view"}
+                onChange={() => onModeChange("view")}
+                className="h-3 w-3"
+              />
+              {t("common.view")}
+            </label>
+            <label className="flex items-center gap-1 text-xs cursor-pointer">
+              <input
+                type="radio"
+                name="canvas-mode"
+                checked={mode === "draw"}
+                onChange={() => onModeChange("draw")}
+                className="h-3 w-3"
+              />
+              {t("common.draw")}
+            </label>
+            <span className="text-gray-300">|</span>
+          </>
+        )}
         <label className="flex items-center gap-1 text-xs cursor-pointer">
           <input
             type="checkbox"
@@ -193,7 +199,7 @@ export function DetectionCanvas({
           />
           {t("common.mask")}
         </label>
-        {mode === "draw" && (
+        {!readOnly && mode === "draw" && (
           <span className="text-xs text-orange-500">{t("detectionCanvas.dragTip")}</span>
         )}
       </div>
@@ -205,7 +211,7 @@ export function DetectionCanvas({
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
-          className={`block mx-auto ${mode === "draw" ? "cursor-crosshair" : "cursor-default"}`}
+          className={`block mx-auto ${!readOnly && mode === "draw" ? "cursor-crosshair" : "cursor-default"}`}
         />
       </div>
     </div>

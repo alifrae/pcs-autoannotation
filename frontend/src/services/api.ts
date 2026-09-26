@@ -1,3 +1,10 @@
+import type {
+  PcsCameraProposalResult,
+  PcsDatInspection,
+  PcsDatSampleSummary,
+  PcsInnov3ProposalResult,
+} from "@/types";
+
 // Using auto-imported centralized request helper
 
 export async function detectImage(
@@ -342,4 +349,199 @@ export async function fetchImportProgress(importId: string): Promise<ImportProgr
 
 export async function cancelImport(importId: string): Promise<void> {
   await request.post(`/datasets/import/${importId}/cancel`);
+}
+
+
+// ── PCS DAT Companion ────────────────────────────
+
+interface RawPcsInnov3Proposal {
+  proposal_id: string;
+  class_name: string;
+  bbox_3d: null | {
+    center_x: number;
+    center_y: number;
+    center_z: number;
+    length: number;
+    width: number;
+    height: number;
+    yaw_rad: number;
+  };
+  confidence: number | null;
+  evidence: Array<Record<string, unknown>>;
+}
+
+interface RawPcsCameraProposal {
+  proposal_id: string;
+  class_name: string;
+  bbox_2d: null | { x1: number; y1: number; x2: number; y2: number };
+  mask_polygon: number[][] | null;
+  confidence: number | null;
+  evidence: Array<Record<string, unknown>>;
+}
+
+interface PcsDatRequest {
+  path: string;
+  lidarIndex: number;
+  lidarStreamName?: string | null;
+  cameraStreamName?: string | null;
+  admaStreamName?: string | null;
+}
+
+export async function inspectPcsDat(path: string): Promise<PcsDatInspection> {
+  const { data } = await request.post("/autoannotation/dat/inspect", { path });
+  return {
+    path: data.path,
+    streams: (data.streams ?? []).map((stream: Record<string, unknown>) => ({
+      name: String(stream.name ?? ""),
+      streamId: Number(stream.stream_id ?? 0),
+      kind: String(stream.kind ?? "unknown"),
+      frameCount: Number(stream.frame_count ?? 0),
+      width: stream.width == null ? null : Number(stream.width),
+      height: stream.height == null ? null : Number(stream.height),
+      fps: stream.fps == null ? null : Number(stream.fps),
+    })),
+    lidarStreams: data.lidar_streams ?? [],
+    cameraStreams: data.camera_streams ?? [],
+    admaStreams: data.adma_streams ?? [],
+    admaNativeApi: data.adma_native_api === true,
+  };
+}
+
+export async function fetchPcsDatSample(
+  params: PcsDatRequest,
+): Promise<PcsDatSampleSummary> {
+  const { data } = await request.post(
+    "/autoannotation/dat/sample-summary",
+    {
+      path: params.path,
+      lidar_index: params.lidarIndex,
+      lidar_stream_name: params.lidarStreamName ?? null,
+      camera_stream_name: params.cameraStreamName ?? null,
+      adma_stream_name: params.admaStreamName ?? null,
+      require_adma: true,
+    },
+    { timeout: DETECT_TIMEOUT },
+  );
+  return {
+    sampleId: data.sample_id,
+    timestampNs: data.timestamp_ns,
+    lidar: {
+      pointCount: data.lidar.point_count,
+      attributes: data.lidar.attributes ?? [],
+      metadata: data.lidar.metadata ?? {},
+    },
+    camera: {
+      timestampNs: data.camera.timestamp_ns,
+      width: data.camera.width,
+      height: data.camera.height,
+      encoding: data.camera.encoding,
+      sourceId: data.camera.source_id,
+      syncDeltaNs: data.camera.sync_delta_ns ?? null,
+    },
+    adma: data.adma == null ? null : {
+      timestampNs: data.adma.timestamp_ns,
+      syncStatus: data.adma.sync_status ?? null,
+      syncDeltaNs: data.adma.sync_delta_ns ?? null,
+      syncToleranceNs: data.adma.sync_tolerance_ns ?? null,
+      sampleIndex: data.adma.sample_index ?? null,
+      streamName: data.adma.stream_name ?? null,
+      values: data.adma.values ?? {},
+    },
+    sourceMetadata: data.source_metadata ?? {},
+  };
+}
+
+export async function fetchPcsDatCameraFrame(
+  params: PcsDatRequest,
+): Promise<Blob> {
+  const { data } = await request.post(
+    "/autoannotation/dat/camera-frame",
+    {
+      path: params.path,
+      lidar_index: params.lidarIndex,
+      lidar_stream_name: params.lidarStreamName ?? null,
+      camera_stream_name: params.cameraStreamName ?? null,
+      adma_stream_name: params.admaStreamName ?? null,
+    },
+    { responseType: "blob", timeout: DETECT_TIMEOUT },
+  );
+  return data;
+}
+
+export async function fetchPcsDatInnov3Proposals(
+  params: PcsDatRequest,
+): Promise<PcsInnov3ProposalResult> {
+  const { data } = await request.post(
+    "/autoannotation/dat/innov3-proposals",
+    {
+      path: params.path,
+      lidar_index: params.lidarIndex,
+      lidar_stream_name: params.lidarStreamName ?? null,
+      camera_stream_name: params.cameraStreamName ?? null,
+      adma_stream_name: params.admaStreamName ?? null,
+    },
+    { timeout: DETECT_TIMEOUT },
+  );
+  return {
+    sampleId: data.sample_id,
+    timestampNs: data.timestamp_ns,
+    provider: data.provider,
+    proposals: ((data.proposals ?? []) as RawPcsInnov3Proposal[]).map((proposal) => ({
+      proposalId: proposal.proposal_id,
+      className: proposal.class_name,
+      bbox3d: proposal.bbox_3d == null ? null : {
+        centerX: proposal.bbox_3d.center_x,
+        centerY: proposal.bbox_3d.center_y,
+        centerZ: proposal.bbox_3d.center_z,
+        length: proposal.bbox_3d.length,
+        width: proposal.bbox_3d.width,
+        height: proposal.bbox_3d.height,
+        yawRad: proposal.bbox_3d.yaw_rad,
+      },
+      confidence: proposal.confidence ?? null,
+      evidence: proposal.evidence ?? [],
+    })),
+  };
+}
+
+export async function fetchPcsDatCameraProposals(
+  params: PcsDatRequest & {
+    categories: string[];
+    useSam2: boolean;
+    sam2ScoreThreshold: number;
+  },
+): Promise<PcsCameraProposalResult> {
+  const { data } = await request.post(
+    "/autoannotation/dat/camera-proposals",
+    {
+      path: params.path,
+      lidar_index: params.lidarIndex,
+      lidar_stream_name: params.lidarStreamName ?? null,
+      camera_stream_name: params.cameraStreamName ?? null,
+      adma_stream_name: params.admaStreamName ?? null,
+      categories: params.categories,
+      use_sam2: params.useSam2,
+      sam2_score_threshold: params.sam2ScoreThreshold,
+    },
+    { timeout: DETECT_TIMEOUT },
+  );
+  return {
+    sampleId: data.sample_id,
+    timestampNs: data.timestamp_ns,
+    cameraTimestampNs: data.camera_timestamp_ns,
+    provider: data.provider,
+    proposals: ((data.proposals ?? []) as RawPcsCameraProposal[]).map((proposal) => ({
+      proposalId: proposal.proposal_id,
+      className: proposal.class_name,
+      bbox2d: proposal.bbox_2d == null ? null : {
+        x1: proposal.bbox_2d.x1,
+        y1: proposal.bbox_2d.y1,
+        x2: proposal.bbox_2d.x2,
+        y2: proposal.bbox_2d.y2,
+      },
+      maskPolygon: proposal.mask_polygon ?? null,
+      confidence: proposal.confidence ?? null,
+      evidence: proposal.evidence ?? [],
+    })),
+  };
 }

@@ -1,0 +1,366 @@
+name: PCS Auto-Annotation v1 Qualification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/multimodal-v1-foundation
+    paths:
+      - ".github/workflows/self-hosted-v1-qualification.yml"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PCS_COMMIT: aec3a119e1017be8dcf10924284b5334bd6038dc
+  AUTO_VENV: /media/o-ralilou/Data/lidar-lab/runtime/autoannotation-py312
+  HF_HOME: /media/o-ralilou/Data/lidar-lab/models/huggingface
+  MODEL_DIR: /media/o-ralilou/Data/lidar-lab/models/locate-anything-3b
+  INNOV3_PYTHON: /media/o-ralilou/Data/lidar-lab/runtime/dsvt-py311-cu124/bin/python
+  INNOV3_CONFIG_PATH: /media/o-ralilou/Data/lidar-lab/models/internal-dsvt/internal_config.pkl
+  INNOV3_CHECKPOINT_PATH: /media/o-ralilou/Data/lidar-lab/models/internal-dsvt/innov3_dsvt_weights.pt
+  INNOV3_DSVT_ROOT: /media/o-ralilou/Data/lidar-lab/runtimes/DSVT
+  DEVICE: cuda
+  AUTOANNOTATION_CAMERA_RELEASE_VLM_BEFORE_SAM2: "true"
+  TOKENIZERS_PARALLELISM: "false"
+
+jobs:
+  qualify:
+    name: Real Highway multimodal v1
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout companion
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve real Highway trace and identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRACE_PATH="$(python3 - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          config_path = Path.home() / ".config" / "engineering-trace-catalog" / "config.toml"
+          with config_path.open("rb") as stream:
+              config = tomllib.load(stream)
+          catalog = config["catalog"]
+          root_env = str(catalog.get("root_env", "ENGINEERING_TRACE_CATALOG_ROOT"))
+          root_value = os.environ.get(root_env, "") or str(catalog.get("root", ""))
+          root = Path(os.path.expandvars(root_value)).expanduser()
+          if not root.is_absolute():
+              root = config_path.parent / root
+          manifest = root / str(catalog.get("manifest", "catalog.toml"))
+          with manifest.open("rb") as stream:
+              data = tomllib.load(stream)
+          entry = next(item for item in data["datasets"] if item["id"] == "highway-v1")
+          print((root / entry["path"]).resolve())
+          PY
+          )"
+          test -f "$TRACE_PATH"
+          RECORDING_SHA256="$(sha256sum "$TRACE_PATH" | awk '{print $1}')"
+          {
+            echo "TRACE_PATH=$TRACE_PATH"
+            echo "RECORDING_SHA256=$RECORDING_SHA256"
+          } >> "$GITHUB_ENV"
+          echo "trace=$TRACE_PATH"
+          echo "recording_sha256=$RECORDING_SHA256"
+          nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
+
+      - name: Provision isolated camera runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -x "$AUTO_VENV/bin/python" ]]; then
+            python -m venv "$AUTO_VENV"
+          fi
+          "$AUTO_VENV/bin/python" -m pip install --upgrade pip wheel setuptools
+          "$AUTO_VENV/bin/python" -m pip install             --index-url https://download.pytorch.org/whl/cu124             "torch==2.6.0" "torchvision==0.21.0"
+          "$AUTO_VENV/bin/python" -m pip install -r backend/requirements.txt
+          "$AUTO_VENV/bin/python" - <<'PY'
+          import torch
+          import transformers
+          import sam2
+
+          if not torch.cuda.is_available():
+              raise SystemExit("CUDA is not available in the autoannotation runtime")
+          print("torch=", torch.__version__)
+          print("transformers=", transformers.__version__)
+          print("gpu=", torch.cuda.get_device_name(0))
+          print("sam2=", getattr(sam2, "__file__", "<namespace>"))
+          PY
+
+      - name: Acquire exact PCS native wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          NATIVE_DIR="$RUNNER_TEMP/pcs-native-autoannotation-v1"
+          PCS_SOURCE="$RUNNER_TEMP/pcs-native-source-v1"
+          rm -rf "$NATIVE_DIR" "$PCS_SOURCE"
+          mkdir -p "$NATIVE_DIR"
+
+          PCS_LOCAL=""
+          for candidate in             /home/o-ralilou/github-runners/*/_work/cb574_point_cloud_sil/cb574_point_cloud_sil             /home/o-ralilou/source/GitHub/cb574_point_cloud_sil             /home/o-ralilou/source/GitHub/point_cloud_studio; do
+            [[ -d "$candidate/.git" || -f "$candidate/.git" ]] || continue
+            if git -C "$candidate" cat-file -e "$PCS_COMMIT^{commit}" 2>/dev/null; then
+              PCS_LOCAL="$candidate"
+              break
+            fi
+          done
+          test -n "$PCS_LOCAL"
+
+          git -C "$PCS_LOCAL" worktree add --detach "$PCS_SOURCE" "$PCS_COMMIT"
+          "$AUTO_VENV/bin/python" -m pip install --quiet maturin
+          (
+            cd "$PCS_SOURCE/bindings"
+            "$AUTO_VENV/bin/python" -m maturin build               --profile native-release               --locked               --strip               --out "$NATIVE_DIR"               --interpreter "$AUTO_VENV/bin/python"               --no-default-features               --features extension-module,transport
+          )
+          git -C "$PCS_LOCAL" worktree remove --force "$PCS_SOURCE" || true
+
+          WHEEL="$(find "$NATIVE_DIR" -type f -name '*.whl' -print -quit)"
+          test -n "$WHEEL"
+          "$AUTO_VENV/bin/python" -m pip install --force-reinstall "$WHEEL"
+          echo "PCS_NATIVE_WHEEL=$WHEEL" >> "$GITHUB_ENV"
+
+          PYTHONPATH="$GITHUB_WORKSPACE/backend" "$AUTO_VENV/bin/python" - <<'PY'
+          import point_cloud_studio_native as native
+
+          assert native.__has_ml__ is False
+          assert "transport" in native.__build_features__
+          assert hasattr(native.transport, "NativeDatReader")
+          assert hasattr(native.transport, "NativeDatImageStreamSource")
+          assert hasattr(native.transport, "NativeDatAdmaStreamSource")
+          assert hasattr(native.export, "decode_ifscan10_to_arrow")
+          assert hasattr(native.math, "compact_ifscan10_spherical")
+          print("pcs_native=", native.__version__, native.__build_profile__, native.__build_features__)
+          PY
+
+      - name: Cache LocateAnything and SAM2 models
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HF_HOME" "$MODEL_DIR"
+          "$AUTO_VENV/bin/python" - <<'PY'
+          import os
+          from huggingface_hub import snapshot_download
+
+          target = os.environ["MODEL_DIR"]
+          snapshot_download(repo_id="nvidia/LocateAnything-3B", local_dir=target)
+          print("locateanything_model_dir=", target)
+          PY
+
+          "$AUTO_VENV/bin/python" - <<'PY'
+          from sam2.build_sam import build_sam2_hf
+
+          model = build_sam2_hf("facebook/sam2.1-hiera-base-plus", device="cpu")
+          del model
+          print("sam2_cache=ready")
+          PY
+
+      - name: Discover verified PCS calibration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v1-qualification
+          PYTHONPATH="$GITHUB_WORKSPACE/backend" "$AUTO_VENV/bin/python" - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from pathlib import Path
+
+          from app.autoannotation.association import load_pcs_calibration
+
+          roots = [Path("/media/o-ralilou/Data"), Path.home()]
+          skip_parts = {
+              ".cache", ".git", "github-runners", "node_modules",
+              "models", "runtime", ".venv",
+          }
+          candidates = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in root.rglob("*"):
+                  if len(candidates) >= 600:
+                      break
+                  if any(part in skip_parts for part in path.parts):
+                      continue
+                  if not path.is_file() or path.suffix.lower() not in {".json", ".yaml", ".yml"}:
+                      continue
+                  name = path.name.casefold()
+                  if "calibration" not in name and "overlay" not in name:
+                      continue
+                  candidates.append(path)
+
+          accepted = []
+          rejected = []
+          for path in candidates:
+              try:
+                  calibration = load_pcs_calibration(path)
+              except Exception as exc:
+                  rejected.append({"path": str(path), "reason": str(exc)[:300]})
+                  continue
+              if (calibration.width, calibration.height) != (4096, 960):
+                  rejected.append({"path": str(path), "reason": "camera geometry mismatch"})
+                  continue
+              try:
+                  raw = path.read_text(encoding="utf-8", errors="ignore")
+              except OSError:
+                  raw = ""
+              evidence = (str(path) + "\n" + raw[:200000]).casefold()
+              if "genicam2" not in evidence and "highway" not in evidence:
+                  rejected.append({
+                      "path": str(path),
+                      "reason": "no Highway/Genicam2 source identity evidence",
+                  })
+                  continue
+              accepted.append({
+                  "path": str(path),
+                  "width": calibration.width,
+                  "height": calibration.height,
+                  "source": calibration.source,
+              })
+
+          report = {
+              "candidate_count": len(candidates),
+              "accepted": accepted,
+              "rejected": rejected[:100],
+          }
+          Path("artifacts/v1-qualification/calibration-discovery.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n"
+          )
+          selected = accepted[0]["path"] if accepted else ""
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as stream:
+              stream.write(f"CALIBRATION_PATH={selected}\n")
+              stream.write(f"CALIBRATION_READY={'true' if selected else 'false'}\n")
+          print("calibration_path=", selected or "<none>")
+          PY
+
+      - name: Run real camera provider when calibration is absent
+        if: env.CALIBRATION_READY != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$GITHUB_WORKSPACE/backend" "$AUTO_VENV/bin/python" - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from pathlib import Path
+
+          from app.autoannotation.pcs_native_dat_source import PcsNativeDatSource
+          from app.autoannotation.providers.camera_provider import camera_frame_to_pil
+          from app.autoannotation.providers.factory import create_camera_provider
+          from app.services.locate_anything import unload_model
+          from app.services.sam2_service import segment_image
+
+          source = PcsNativeDatSource(Path(os.environ["TRACE_PATH"]))
+          sample = source.build_synchronized_sample(
+              0,
+              camera_stream_name="Genicam2",
+              require_adma=True,
+          )
+          provider = create_camera_provider()
+          proposals = tuple(provider.infer(sample))
+
+          unload_model()
+          image = camera_frame_to_pil(sample.camera)
+          try:
+              w, h = image.size
+              polygons = segment_image(
+                  image,
+                  [{
+                      "x1": w * 0.35,
+                      "y1": h * 0.30,
+                      "x2": w * 0.65,
+                      "y2": h * 0.80,
+                      "class_name": "runtime-probe",
+                      "confidence": 1.0,
+                  }],
+                  score_threshold=0.0,
+              )
+          finally:
+              image.close()
+
+          report = {
+              "sample_id": sample.sample_id,
+              "proposal_count": len(proposals),
+              "proposals": [
+                  {
+                      "id": item.proposal_id,
+                      "class": item.class_name,
+                      "bbox": None if item.bbox_2d is None else {
+                          "x1": item.bbox_2d.x1,
+                          "y1": item.bbox_2d.y1,
+                          "x2": item.bbox_2d.x2,
+                          "y2": item.bbox_2d.y2,
+                      },
+                      "mask_points": len(item.mask_polygon or ()),
+                  }
+                  for item in proposals
+              ],
+              "sam2_probe_polygon_count": len(polygons),
+          }
+          Path("artifacts/v1-qualification/camera-runtime.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n"
+          )
+          print(json.dumps(report, indent=2))
+          print("camera_vlm_execution=PASS")
+          print("sam2_execution=PASS")
+          PY
+
+      - name: Run complete v1 qualification
+        if: env.CALIBRATION_READY == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$GITHUB_WORKSPACE/backend" "$AUTO_VENV/bin/python"             backend/scripts/qualify_autoannotation_v1.py               --trace "$TRACE_PATH"               --calibration "$CALIBRATION_PATH"               --recording-key "highway-v1"               --recording-sha256 "$RECORDING_SHA256"               --lidar-index 0               --camera-stream "Genicam2"               --min-iou 0.10               --output-dir artifacts/v1-qualification               --run-id "github-${{ github.run_id }}"               --innov3-python "$INNOV3_PYTHON"               --innov3-config "$INNOV3_CONFIG_PATH"               --innov3-checkpoint "$INNOV3_CHECKPOINT_PATH"               --innov3-dsvt-root "$INNOV3_DSVT_ROOT"
+          echo "full_v1_execution=PASS"
+
+      - name: Record infrastructure result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/v1-qualification
+          {
+            echo "pcs_commit=$PCS_COMMIT"
+            echo "trace=$TRACE_PATH"
+            echo "recording_sha256=$RECORDING_SHA256"
+            echo "calibration_ready=${CALIBRATION_READY:-false}"
+            echo "calibration_path=${CALIBRATION_PATH:-}"
+            echo "auto_venv=$AUTO_VENV"
+            echo "model_dir=$MODEL_DIR"
+            echo "innov3_python=$INNOV3_PYTHON"
+          } > artifacts/v1-qualification/infrastructure.txt
+
+      - name: Upload v1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcs-autoannotation-v1-qualification-${{ github.run_id }}
+          path: artifacts/v1-qualification/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report qualification state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${CALIBRATION_READY:-false}" != "true" ]]; then
+            echo "::warning::Full fusion qualification is blocked by the absence of a verified Highway/Genicam2 PCS calibration artifact."
+            echo "qualification_status=blocked_missing_verified_calibration"               >> artifacts/v1-qualification/infrastructure.txt
+            exit 0
+          fi
+          test -f artifacts/v1-qualification/qualification.json
+          test -f artifacts/v1-qualification/scene-objects.proposed.json
+          echo "qualification_status=executed"             >> artifacts/v1-qualification/infrastructure.txt

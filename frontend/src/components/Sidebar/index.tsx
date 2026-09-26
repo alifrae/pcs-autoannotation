@@ -76,6 +76,7 @@ export function Sidebar({
       <SidebarHeader />
 
       {/* Model selector */}
+      {inputMode !== "pcs-dat" && (
       <div className="flex rounded-lg border border-gray-200/60 bg-gray-100/80 p-1 relative min-h-[36px] mb-2 shadow-inner">
         {(["vlm+sam2", "sam3"] as const).map((mode) => {
           const active = mode === "sam3" ? useSam3 : !useSam3;
@@ -95,10 +96,12 @@ export function Sidebar({
           );
         })}
       </div>
+      )}
 
-      {useSam3 ? <Sam3Status /> : <ModelStatus />}
+      {inputMode !== "pcs-dat" && (useSam3 ? <Sam3Status /> : <ModelStatus />)}
 
       {/* Mode tabs */}
+      {inputMode !== "pcs-dat" && (
       <div className="flex border-b border-gray-200 mb-2">
         {(["annotate", "validate"] as const).map((m) => (
           <button
@@ -114,8 +117,9 @@ export function Sidebar({
           </button>
         ))}
       </div>
+      )}
 
-      {appMode === "validate" && (
+      {inputMode !== "pcs-dat" && appMode === "validate" && (
         <ValidationSettings
           selectedJobId={selectedTrainedJobId}
           onSelectJob={setSelectedTrainedJobId}
@@ -133,7 +137,7 @@ export function Sidebar({
       {/* Input mode: Image / Video */}
       <div>
         <div className="flex gap-1 rounded bg-gray-100 p-0.5 mb-2">
-          {(["image", "video"] as const).map((mode) => (
+          {(["image", "video", "pcs-dat"] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => { setInputMode(mode); setFiles([]); setPreviewUrl(null); setBatch([]); }}
@@ -143,7 +147,7 @@ export function Sidebar({
                   : "text-gray-500 hover:text-gray-700"
               }`}
             >
-              {{ image: t("common.image"), video: t("common.video") }[mode]}
+              {{ image: t("common.image"), video: t("common.video"), "pcs-dat": "PCS DAT" }[mode]}
             </button>
           ))}
         </div>
@@ -153,7 +157,7 @@ export function Sidebar({
             onClear={() => { setFiles([]); setPreviewUrl(null); setBatch([]); }}
             disabled={loading}
           />
-        ) : (
+        ) : inputMode === "video" ? (
           <VideoPanel
             onLoadKeyframes={handleSelectKeyframe}
             onValidateVideo={
@@ -163,10 +167,14 @@ export function Sidebar({
             }
             disabled={loading}
           />
+        ) : (
+          <div className="rounded border border-primary-100 bg-primary-50 px-3 py-3 text-xs leading-5 text-gray-600">
+            Open a server-side DAT in the workspace. PCS native remains the decoding and synchronization authority.
+          </div>
         )}
       </div>
 
-      {!(appMode === "validate" && inputMode === "video" && validateVideoId) && (
+      {inputMode !== "pcs-dat" && !(appMode === "validate" && inputMode === "video" && validateVideoId) && (
         <DetectionControls
           recentCategories={recentCategories}
           loading={loading}
@@ -182,14 +190,16 @@ export function Sidebar({
         </div>
       )}
 
+      {inputMode !== "pcs-dat" && (
       <BatchProgress
         current={batchProgress.current}
         total={batchProgress.total}
         completed={batchResults.length}
         onCancel={cancel}
       />
+      )}
 
-      {result && (
+      {inputMode !== "pcs-dat" && result && (
         <FilterPanel
           filterMode={filterMode}
           onFilterModeChange={setFilterMode}
@@ -199,6 +209,8 @@ export function Sidebar({
         />
       )}
 
+      {inputMode !== "pcs-dat" && (
+      <>
       <hr className="border-gray-100" />
 
       <div>
@@ -229,6 +241,8 @@ export function Sidebar({
           fetchNextPage={historyQuery.fetchNextPage}
         />
       </div>
+      </>
+      )}
     </aside>
   );
 }

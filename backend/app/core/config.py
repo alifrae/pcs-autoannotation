@@ -32,6 +32,21 @@ class Settings(BaseSettings):
     sam2_model_id: str = "facebook/sam2.1-hiera-base-plus"
     sam2_checkpoint_path: str = ""
 
+    # PCS Auto-Annotation companion
+    pcs_native_required: bool = True
+    autoannotation_camera_categories: list[str] = ["car", "truck"]
+    autoannotation_camera_use_sam2: bool = True
+    autoannotation_sam2_score_threshold: float = 0.0
+    autoannotation_camera_release_vlm_before_sam2: bool = False
+
+    # Innov3 DSVT
+    innov3_dsvt_root: str = ""
+    innov3_config_path: str = ""
+    innov3_checkpoint_path: str = ""
+    innov3_python: str = ""
+    innov3_device: str = "cuda"
+    innov3_timeout_seconds: int = 180
+
     @property
     def resolved_device(self) -> str:
         from .gpu_memory import _detect_device

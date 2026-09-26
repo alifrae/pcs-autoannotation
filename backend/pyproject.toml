@@ -1,7 +1,7 @@
 [project]
-name = "locate-anything-backend"
-version = "1.5.16"
-description = "Backend API for VLM-AutoYOLO - VLM-powered auto-labeling and YOLO training platform"
+name = "pcs-autoannotation-backend"
+version = "0.1.0"
+description = "PCS-dependent multimodal auto-annotation companion backend"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
@@ -10,10 +10,15 @@ dependencies = [
     "psycopg2-binary>=2.9.0",
     "pydantic-settings>=2.6.0",
     "transformers>=4.57.1",
+    "huggingface_hub>=0.28.0",
     "torch>=2.6.0",
     "Pillow>=11.0.0",
     "opencv-python-headless>=4.10.0",
+    "sam2>=1.0.0",
+    "peft>=0.12.0",
     "numpy>=2.0.0",
+    "pyarrow>=18.0.0",
+    "PyYAML>=6.0.0",
     "python-multipart>=0.0.18",
     "alembic>=1.14.0",
 ]

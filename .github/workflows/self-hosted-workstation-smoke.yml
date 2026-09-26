@@ -1,0 +1,167 @@
+name: PCS Auto-Annotation Workstation Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/multimodal-v1-foundation
+    paths:
+      - ".github/workflows/self-hosted-workstation-smoke.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pcs-autoannotation-workstation-smoke
+  cancel-in-progress: true
+
+jobs:
+  workstation-smoke:
+    name: Linux workstation and trace catalog
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    env:
+      ENGINEERING_TRACE_CATALOG_CONFIG: ${{ vars.ENGINEERING_TRACE_CATALOG_CONFIG }}
+      ENGINEERING_TRACE_CATALOG_ROOT: ${{ vars.ENGINEERING_TRACE_CATALOG_ROOT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Workstation identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "runner_name=${RUNNER_NAME:-unknown}"
+          echo "runner_os=${RUNNER_OS:-unknown}"
+          echo "runner_arch=${RUNNER_ARCH:-unknown}"
+          hostname
+          uname -a
+          python3 --version
+          if command -v nvidia-smi >/dev/null 2>&1; then
+            nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
+          else
+            echo "nvidia-smi=unavailable"
+          fi
+
+      - name: Resolve shared engineering trace catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import os
+          import tomllib
+          from pathlib import Path
+
+          def sha256_file(path: Path) -> str:
+              digest = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          explicit = os.environ.get("ENGINEERING_TRACE_CATALOG_CONFIG", "").strip()
+          candidates = []
+          if explicit:
+              candidates.append(Path(os.path.expandvars(explicit)).expanduser())
+          candidates.append(
+              Path.home() / ".config" / "engineering-trace-catalog" / "config.toml"
+          )
+
+          config_path = next((path.resolve() for path in candidates if path.is_file()), None)
+          if config_path is None:
+              raise SystemExit(
+                  "trace catalog config unavailable; checked repo variable and user config"
+              )
+
+          with config_path.open("rb") as stream:
+              config = tomllib.load(stream)
+          if config.get("schema") != "engineering-trace-catalog-config/v1":
+              raise SystemExit(f"unexpected trace catalog config schema: {config.get('schema')!r}")
+
+          catalog_cfg = config.get("catalog", {})
+          root_env = str(catalog_cfg.get("root_env", "ENGINEERING_TRACE_CATALOG_ROOT"))
+          root_value = os.environ.get(root_env, "").strip()
+          if not root_value:
+              root_value = str(catalog_cfg.get("root", "") or "").strip()
+          if not root_value:
+              raise SystemExit(f"trace catalog root unavailable: {root_env} is not configured")
+
+          root = Path(os.path.expandvars(root_value)).expanduser()
+          if not root.is_absolute():
+              root = config_path.parent / root
+          root = root.resolve()
+          if not root.is_dir():
+              raise SystemExit(f"trace catalog root is not a directory: {root}")
+
+          manifest_value = str(catalog_cfg.get("manifest", "catalog.toml"))
+          manifest = Path(manifest_value)
+          if not manifest.is_absolute():
+              manifest = root / manifest
+          manifest = manifest.resolve()
+          if not manifest.is_file():
+              raise SystemExit(f"trace catalog manifest unavailable: {manifest}")
+
+          with manifest.open("rb") as stream:
+              catalog = tomllib.load(stream)
+          if catalog.get("schema") != "engineering-trace-catalog/v1":
+              raise SystemExit(f"unexpected trace catalog schema: {catalog.get('schema')!r}")
+
+          entries = {
+              str(entry.get("id", "")).strip(): entry
+              for entry in catalog.get("datasets", [])
+              if isinstance(entry, dict)
+          }
+          dataset = entries.get("highway-v1")
+          if dataset is None:
+              raise SystemExit(
+                  f"highway-v1 missing; available={sorted(k for k in entries if k)}"
+              )
+
+          relative = Path(str(dataset.get("path", "")))
+          highway = (root / relative).resolve()
+          highway.relative_to(root)
+          if not highway.is_file():
+              raise SystemExit(f"highway-v1 file unavailable: {highway}")
+
+          expected_sha = str(dataset.get("sha256", "") or "").lower()
+          actual_sha = sha256_file(highway)
+          if expected_sha and actual_sha != expected_sha:
+              raise SystemExit(
+                  f"highway-v1 hash mismatch: expected={expected_sha} actual={actual_sha}"
+              )
+
+          print(f"catalog_config={config_path}")
+          print(f"catalog_root={root}")
+          print(f"catalog_manifest={manifest}")
+          print(f"catalog_revision={catalog.get('revision', '')}")
+          print("dataset_id=highway-v1")
+          print(f"dataset_path={highway}")
+          print(f"dataset_size_bytes={highway.stat().st_size}")
+          print(f"dataset_sha256={actual_sha}")
+          print(f"dataset_format={dataset.get('format', '')}")
+          print(f"dataset_streams={dataset.get('streams', [])}")
+          print("trace_catalog_access=ok")
+          PY
+
+      - name: Probe PCS native availability on workstation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          try:
+              import point_cloud_studio_native as native
+          except ImportError:
+              print("pcs_native_installed=false")
+          else:
+              print("pcs_native_installed=true")
+              print(f"pcs_native_version={getattr(native, '__version__', '')}")
+              transport = getattr(native, "transport", None)
+              print(
+                  "pcs_native_adma_source="
+                  + str(bool(transport and hasattr(transport, "NativeDatAdmaStreamSource"))).lower()
+              )
+          PY
