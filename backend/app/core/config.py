@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     autoannotation_camera_categories: list[str] = ["car", "truck"]
     autoannotation_camera_use_sam2: bool = True
     autoannotation_sam2_score_threshold: float = 0.0
+    autoannotation_camera_release_vlm_before_sam2: bool = False
 
     # Innov3 DSVT
     innov3_dsvt_root: str = ""
