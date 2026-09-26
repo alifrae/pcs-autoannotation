@@ -184,9 +184,11 @@ class PcsNativeDatSource:
                 "No local ADMA parser is permitted in pcs-autoannotation."
             )
 
+        selected_lidar_stream = str(lidar.metadata.get("stream_name") or "")
+        selected_camera_stream = str(camera.metadata.get("stream_name") or "")
         sample_seed = (
             f"{self.path.resolve()}|{lidar.timestamp_ns}|"
-            f"{lidar_stream_name or ''}|{camera_stream_name or ''}"
+            f"{selected_lidar_stream}|{selected_camera_stream}"
         )
         sample_id = hashlib.sha256(sample_seed.encode("utf-8")).hexdigest()[:24]
         return SynchronizedSample(
@@ -198,6 +200,8 @@ class PcsNativeDatSource:
             source_metadata={
                 "dat_path": str(self.path),
                 "authority": "point_cloud_studio_native",
+                "lidar_stream_name": selected_lidar_stream,
+                "camera_stream_name": selected_camera_stream,
                 "adma_status": "waiting_for_pcs_native_api",
             },
         )
