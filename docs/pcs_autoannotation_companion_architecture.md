@@ -102,8 +102,8 @@ The companion consumes these PCS-owned surfaces:
 - `transport.NativeDatReader` for LiDAR DAT access;
 - `codec.decode_ifscan_payload` for structured point-cloud decoding;
 - `transport.NativeDatImageStreamSource` for timestamped camera access;
-- `transport.NativeDatAdmaStreamSource` for ADMA once that PCS-native API is
-  available.
+- `transport.NativeDatAdmaStreamSource` for structurally classified,
+  timestamp-indexed ADMA access.
 
 The companion may adapt native outputs into its own annotation-domain objects,
 but must not infer or duplicate sensor binary layouts.
@@ -115,12 +115,17 @@ but must not infer or duplicate sensor binary layouts.
 
 It can currently:
 
-- inspect native DAT streams;
-- identify LiDAR, image and ADMA-labelled streams;
+- inspect PCS-native DAT streams;
+- identify LiDAR, image and ADMA streams from PCS structural classification;
 - decode a LiDAR frame through PCS native;
 - retrieve the camera frame nearest to the LiDAR timestamp;
-- construct a deterministic sample identifier;
-- report ADMA as blocked until PCS exposes the typed native API.
+- retrieve the ADMA sample through `NativeDatAdmaStreamSource`;
+- fail closed when ADMA is outside the qualified 20 ms synchronization
+  tolerance;
+- construct a deterministic sample identifier from the actual selected streams.
+
+The companion does not identify ADMA by names such as `ADMA` or
+`ADMA_NET_3330`, and does not decode ADMAnet payloads itself.
 
 The implementation intentionally takes echo count, slots, layers, IFSCAN version
 and structure metadata from the native decoded frame. Those values are not
@@ -147,9 +152,14 @@ SynchronizedSample
 └── source_metadata
 ```
 
-ADMA is required for the completed baseline workflow. Until the PCS native ADMA
-API lands, synchronized sample construction fails explicitly when ADMA is
-required.
+ADMA is part of the baseline synchronized sample. The default V1 path requires
+LiDAR, camera and ADMA to be supplied by the PCS native wheel.
+
+The PCS native ADMA contract was qualified on the shared `highway-v1` DAT with
+6,001 ADMA samples and 235 LiDAR frames. Native nearest-time association produced
+median 2.321 ms, p95 4.762 ms, p99 6.916 ms and max 17.938 ms, with zero samples
+outside the 20 ms qualification tolerance. The companion uses bounded
+`get_sample_at(..., tolerance_ns)` rather than unbounded nearest lookup.
 
 ## Annotation provider contract
 
@@ -307,12 +317,15 @@ annotation trustworthiness.
 
 ## Capability status
 
-- **PCS Native DAT Ingestion — implemented foundation.** Native runtime probing,
-  DAT stream inspection, LiDAR decode, nearest camera retrieval and native-wheel
-  verification/install support are present.
-- **Synchronized Sensor Sample — partially implemented.** LiDAR and camera are
-  synchronized by native timestamps. ADMA remains blocked on the parallel PCS
-  native extension.
+- **PCS Native DAT Ingestion — implemented and PCS-qualified.** Native runtime
+  probing, structural stream inspection, LiDAR decode, nearest camera retrieval,
+  native ADMA lookup and native-wheel verification/install support are present.
+  PCS PR #147 head `aec3a119e1017be8dcf10924284b5334bd6038dc`
+  passed PCS CI and the headless native artifact workflow.
+- **Synchronized Sensor Sample — implemented foundation.** The V1 sample now
+  contains PCS-native LiDAR, camera and ADMA evidence. ADMA association is
+  bounded by the qualified 20 ms tolerance and preserves native decoded fields
+  without companion-side pose interpretation.
 - **Innov3 DSVT LiDAR Proposals — runtime path implemented, qualification
   pending.** The frozen preprocessing contract, checkpoint verification,
   OpenPCDet runtime, provider and DAT-to-proposal endpoint are present. The path
