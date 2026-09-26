@@ -11,8 +11,12 @@ from ...autoannotation.pcs_native_runtime import (
     PcsNativeUnavailableError,
     inspect_pcs_native,
 )
-from ...autoannotation.pcs_scene_objects import write_pcs_scene_object_document
+from ...autoannotation.pcs_scene_objects import (
+    load_pcs_scene_object_document,
+    write_pcs_scene_object_document,
+)
 from ...autoannotation.pipeline import run_autoannotation_sample
+from ...autoannotation.qualification import qualify_review_document
 from ...autoannotation.providers.factory import (
     create_camera_provider,
     create_innov3_provider,
@@ -51,6 +55,11 @@ class DatAutoAnnotationRequest(DatInnov3Request):
     min_iou: float = Field(default=0.1, ge=0.0, le=1.0)
     run_id: str | None = None
     output_path: str | None = None
+
+
+class ReviewQualificationRequest(BaseModel):
+    path: str = Field(..., min_length=1)
+    human_seconds: float | None = Field(default=None, ge=0.0)
 
 
 @router.get("/pcs-native/status")
@@ -318,3 +327,20 @@ def dat_autoannotation_run(request: DatAutoAnnotationRequest) -> dict:
         "scene_object_path": saved_path,
         "calibration_source": calibration.source,
     }
+
+
+@router.post("/review/qualify")
+def qualify_pcs_review(request: ReviewQualificationRequest) -> dict:
+    """Summarize a PCS-reviewed scene-object document without altering it."""
+
+    try:
+        document = load_pcs_scene_object_document(Path(request.path))
+        report = qualify_review_document(
+            document,
+            human_seconds=request.human_seconds,
+        )
+    except FileNotFoundError as exc:
+        raise AppError(str(exc), 404) from exc
+    except (ValueError, TypeError) as exc:
+        raise AppError(str(exc), 422) from exc
+    return report.as_dict()
