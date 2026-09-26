@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from app.autoannotation.contracts import CameraFrame, LidarFrame, SynchronizedSample
 from app.autoannotation.providers.innov3_dsvt import Innov3RawDetections
