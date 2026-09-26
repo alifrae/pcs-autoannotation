@@ -1,3 +1,10 @@
+import type {
+  PcsCameraProposalResult,
+  PcsDatInspection,
+  PcsDatSampleSummary,
+  PcsInnov3ProposalResult,
+} from "@/types";
+
 // Using auto-imported centralized request helper
 
 export async function detectImage(
