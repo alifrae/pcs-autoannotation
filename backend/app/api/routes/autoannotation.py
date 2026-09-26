@@ -14,6 +14,7 @@ from ...autoannotation.pcs_native_runtime import (
     inspect_pcs_native,
 )
 from ...autoannotation.providers.factory import (
+    create_camera_provider,
     create_innov3_provider,
     inspect_innov3_configuration,
 )
@@ -51,7 +52,7 @@ def provider_status() -> dict:
         "camera_baseline": {
             "provider": "LocateAnything-3B+SAM2",
             "available_in_upstream_engine": True,
-            "companion_adapter": False,
+            "companion_adapter": True,
         },
     }
 
@@ -154,6 +155,67 @@ def dat_innov3_proposals(request: DatInnov3Request) -> dict:
                         "yaw_rad": proposal.bbox_3d.yaw_rad,
                     }
                 ),
+                "confidence": (
+                    proposal.evidence[0].confidence if proposal.evidence else None
+                ),
+                "evidence": [
+                    {
+                        "provider_id": evidence.provider.provider_id,
+                        "modality": evidence.modality.value,
+                        "confidence": evidence.confidence,
+                        "metadata": dict(evidence.metadata),
+                    }
+                    for evidence in proposal.evidence
+                ],
+            }
+            for proposal in proposals
+        ],
+    }
+
+
+@router.post("/dat/camera-proposals")
+def dat_camera_proposals(request: DatInnov3Request) -> dict:
+    """Run the configured LocateAnything/SAM2 baseline on one PCS-native camera frame."""
+
+    try:
+        source = PcsNativeDatSource(Path(request.path))
+        sample = source.build_synchronized_sample(
+            request.lidar_index,
+            lidar_stream_name=request.lidar_stream_name,
+            camera_stream_name=request.camera_stream_name,
+            require_adma=False,
+        )
+        provider = create_camera_provider()
+        proposals = provider.infer(sample)
+    except FileNotFoundError as exc:
+        raise AppError(str(exc), 404) from exc
+    except (PcsNativeUnavailable, PcsNativeCapabilityError) as exc:
+        raise AppError(str(exc), 503) from exc
+    except RuntimeError as exc:
+        raise AppError(str(exc), 503) from exc
+    except (LookupError, ValueError, IndexError) as exc:
+        raise AppError(str(exc), 422) from exc
+
+    return {
+        "sample_id": sample.sample_id,
+        "timestamp_ns": sample.timestamp_ns,
+        "camera_timestamp_ns": sample.camera.timestamp_ns,
+        "provider": provider.identity.provider_id,
+        "proposals": [
+            {
+                "proposal_id": proposal.proposal_id,
+                "class_name": proposal.class_name,
+                "bbox_2d": (
+                    None
+                    if proposal.bbox_2d is None
+                    else {
+                        "x1": proposal.bbox_2d.x1,
+                        "y1": proposal.bbox_2d.y1,
+                        "x2": proposal.bbox_2d.x2,
+                        "y2": proposal.bbox_2d.y2,
+                    }
+                ),
+                "mask_polygon": proposal.mask_polygon,
                 "confidence": (
                     proposal.evidence[0].confidence if proposal.evidence else None
                 ),
