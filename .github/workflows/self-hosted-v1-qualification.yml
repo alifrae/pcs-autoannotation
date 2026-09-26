@@ -322,7 +322,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PYTHONPATH="$GITHUB_WORKSPACE/backend" "$AUTO_VENV/bin/python"             backend/scripts/qualify_autoannotation_v1.py               --trace "$TRACE_PATH"               --calibration "$CALIBRATION_PATH"               --recording-key "highway-v1"               --recording-sha256 "$RECORDING_SHA256"               --lidar-index 0               --camera-stream "Genicam2"               --min-iou 0.10               --output-dir artifacts/v1-qualification               --run-id "github-${{ github.run_id }"               --innov3-python "$INNOV3_PYTHON"               --innov3-config "$INNOV3_CONFIG_PATH"               --innov3-checkpoint "$INNOV3_CHECKPOINT_PATH"               --innov3-dsvt-root "$INNOV3_DSVT_ROOT"
+          PYTHONPATH="$GITHUB_WORKSPACE/backend" "$AUTO_VENV/bin/python"             backend/scripts/qualify_autoannotation_v1.py               --trace "$TRACE_PATH"               --calibration "$CALIBRATION_PATH"               --recording-key "highway-v1"               --recording-sha256 "$RECORDING_SHA256"               --lidar-index 0               --camera-stream "Genicam2"               --min-iou 0.10               --output-dir artifacts/v1-qualification               --run-id "github-${{ github.run_id }}"               --innov3-python "$INNOV3_PYTHON"               --innov3-config "$INNOV3_CONFIG_PATH"               --innov3-checkpoint "$INNOV3_CHECKPOINT_PATH"               --innov3-dsvt-root "$INNOV3_DSVT_ROOT"
           echo "full_v1_execution=PASS"
 
       - name: Record infrastructure result
