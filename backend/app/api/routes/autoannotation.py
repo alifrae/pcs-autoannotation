@@ -16,12 +16,12 @@ from ...autoannotation.pcs_scene_objects import (
     write_pcs_scene_object_document,
 )
 from ...autoannotation.pipeline import run_autoannotation_sample
-from ...autoannotation.qualification import qualify_review_document
 from ...autoannotation.providers.factory import (
     create_camera_provider,
     create_innov3_provider,
     inspect_innov3_configuration,
 )
+from ...autoannotation.qualification import qualify_review_document
 from ...core.exceptions import AppError
 from ...services.locate_anything import get_model_status
 from ...services.sam2_service import get_sam2_status
