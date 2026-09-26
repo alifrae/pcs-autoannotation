@@ -15,6 +15,8 @@ from .contracts import (
     BoundingBox3D,
     ObjectProposal,
     ProviderEvidence,
+    ProviderIdentity,
+    SensorModality,
 )
 
 
@@ -360,8 +362,11 @@ def _fuse(
     seed = f"{lidar.sample_id}|{lidar.proposal_id}|{camera.proposal_id}|{score:.12f}"
     proposal_id = hashlib.sha256(seed.encode()).hexdigest()[:24]
     association_evidence = ProviderEvidence(
-        provider=lidar.evidence[0].provider if lidar.evidence else camera.evidence[0].provider,
-        modality=lidar.evidence[0].modality if lidar.evidence else camera.evidence[0].modality,
+        provider=ProviderIdentity(
+            provider_id="camera-lidar-association",
+            model_name="deterministic-projected-box-iou",
+        ),
+        modality=SensorModality.LIDAR,
         confidence=score,
         metadata={
             "kind": "camera_lidar_iou",
