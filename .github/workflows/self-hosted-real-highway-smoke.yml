@@ -81,7 +81,7 @@ jobs:
       - name: Acquire exact PCS native wheel
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           NATIVE_DIR="$RUNNER_TEMP/pcs-native-autoannotation"
@@ -245,7 +245,7 @@ jobs:
           set -euo pipefail
           export CUDA_HOME="$LIDAR_LAB_DATA_ROOT/runtime/cuda-12.4.1"
           export PATH="$LIDAR_LAB_DATA_ROOT/runtime/dsvt-py311-cu124/bin:$CUDA_HOME/bin:$PATH"
-          export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${{LD_LIBRARY_PATH:-}"
+          export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
 
           PYTHONPATH="$GITHUB_WORKSPACE/backend" "$ML_PYTHON" - <<'PY'
           from __future__ import annotations
@@ -313,7 +313,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pcs-autoannotation-highway-smoke-${{ github.run_id }
+          name: pcs-autoannotation-highway-smoke-${{ github.run_id }}
           path: artifacts/highway-smoke/
           if-no-files-found: warn
           retention-days: 30
