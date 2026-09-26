@@ -326,15 +326,17 @@ annotation trustworthiness.
   contains PCS-native LiDAR, camera and ADMA evidence. ADMA association is
   bounded by the qualified 20 ms tolerance and preserves native decoded fields
   without companion-side pose interpretation.
-- **Innov3 DSVT LiDAR Proposals — runtime path implemented, qualification
-  pending.** The frozen preprocessing contract, checkpoint verification,
-  OpenPCDet runtime, provider and DAT-to-proposal endpoint are present. The path
-  still needs a real configured workstation run and PCS visual validation of
-  returned boxes.
-- **LocateAnything/SAM2 Camera Provider — implemented foundation.** PCS-native
-  camera frames are converted in memory using their authoritative encoding,
-  LocateAnything/SAM2 produces 2D proposals, and a DAT-to-camera-proposal
-  endpoint is present. Real-DAT/model qualification remains pending.
+- **Innov3 DSVT LiDAR Proposals — real Highway execution passed.** The frozen
+  preprocessing contract, checkpoint verification, OpenPCDet runtime, provider
+  and DAT-to-proposal path are present. Self-hosted run 36252474205 decoded a
+  real Highway sample through PCS native and executed Innov3 on the RTX A2000.
+  The smoke produced one raw model proposal (label 2, score 0.1568). This proves
+  execution only; proposal quality and PCS visual validation remain unqualified.
+- **LocateAnything/SAM2 Camera Provider — adapter implemented, runtime pending.**
+  The real Highway smoke successfully extracted the selected Genicam2 frame
+  through PCS native, but the workstation currently has no LocateAnything/SAM2
+  Python runtime or cached LocateAnything-3B model. Camera-model execution is
+  therefore still pending.
 - **Camera–LiDAR Association — pending.**
 - **PCS Review and Correction — pending.**
 - **Auto-Annotation Baseline Qualification — pending.**
@@ -342,3 +344,25 @@ annotation trustworthiness.
 These explicit capability names are the tracking vocabulary for this repository.
 Scheduling changes must update status under the same names rather than inventing
 new numbered labels.
+
+
+## Real Highway smoke evidence
+
+Self-hosted workflow run `36252474205` at companion commit
+`d752022db23345edc53654c5a1339d78b18ac04d` passed on `linux-ws`.
+
+Verified on the shared `highway-v1` DAT:
+
+- point-cloud stream: `ScaLa 3-PointCloud`, 235 frames;
+- selected camera stream: `Genicam2`, 4096×960, 2,401 frames;
+- ADMA stream: 6,001 samples;
+- real first/middle/last synchronized sample construction passed;
+- ADMA stayed inside the 20 ms synchronization gate;
+- native IFSCAN10 decoding used PCS `export` + `math` surfaces;
+- Innov3 executed on the real prepared frame and returned one raw proposal;
+- evidence artifact: `pcs-autoannotation-highway-smoke-36252474205`.
+
+The smoke also found that the runner's base Python environment does not yet
+contain `torch`, `transformers`, `sam2`, or a cached
+`nvidia/LocateAnything-3B` model. The camera provider code is present, but its
+real model execution remains a separate qualification gate.
