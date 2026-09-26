@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from ...autoannotation.pcs_native_dat_source import PcsNativeDatSource
 from ...autoannotation.pcs_native_runtime import (
-    PcsNativeUnavailable,
+    PcsNativeUnavailableError,
     inspect_pcs_native,
 )
 from ...autoannotation.providers.factory import (
@@ -63,7 +63,7 @@ def inspect_dat(request: DatPathRequest) -> dict:
         return source.inspect().as_dict()
     except FileNotFoundError as exc:
         raise AppError(f"DAT file not found: {request.path}", 404) from exc
-    except PcsNativeUnavailable as exc:
+    except PcsNativeUnavailableError as exc:
         raise AppError(str(exc), 503) from exc
 
 
@@ -80,7 +80,7 @@ def dat_sample_summary(request: DatSampleSummaryRequest) -> dict:
         )
     except FileNotFoundError as exc:
         raise AppError(f"DAT file not found: {request.path}", 404) from exc
-    except PcsNativeUnavailable as exc:
+    except PcsNativeUnavailableError as exc:
         raise AppError(str(exc), 503) from exc
     except (LookupError, ValueError, IndexError) as exc:
         raise AppError(str(exc), 422) from exc
@@ -135,7 +135,7 @@ def dat_innov3_proposals(request: DatInnov3Request) -> dict:
         proposals = provider.infer(sample)
     except FileNotFoundError as exc:
         raise AppError(str(exc), 404) from exc
-    except PcsNativeUnavailable as exc:
+    except PcsNativeUnavailableError as exc:
         raise AppError(str(exc), 503) from exc
     except RuntimeError as exc:
         raise AppError(str(exc), 503) from exc
@@ -198,7 +198,7 @@ def dat_camera_proposals(request: DatInnov3Request) -> dict:
         proposals = provider.infer(sample)
     except FileNotFoundError as exc:
         raise AppError(str(exc), 404) from exc
-    except PcsNativeUnavailable as exc:
+    except PcsNativeUnavailableError as exc:
         raise AppError(str(exc), 503) from exc
     except RuntimeError as exc:
         raise AppError(str(exc), 503) from exc
