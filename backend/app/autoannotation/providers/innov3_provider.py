@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -54,7 +54,7 @@ class Innov3DsvtProvider:
                 else str(int(label))
             )
             proposal_id = hashlib.sha256(
-                f"{sample.sample_id}|{self.identity.provider_id}|{index}".encode("utf-8")
+                f"{sample.sample_id}|{self.identity.provider_id}|{index}".encode()
             ).hexdigest()[:24]
 
             proposals.append(
