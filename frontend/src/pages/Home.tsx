@@ -3,6 +3,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Sidebar } from "@/components/Sidebar";
 import { VideoValidator } from "@/components/VideoValidator";
 import { DetectionResult } from "@/components/DetectionResult";
+import { PcsDatWorkspace } from "@/components/PcsDatWorkspace";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "@/store/useAppStore";
 import { useDetectionProcess } from "@/hooks/useDetectionProcess";
@@ -13,6 +14,7 @@ export function Home() {
   const { t } = useTranslation();
   const {
     appMode,
+    inputMode,
     validateModelSource,
     selectedTrainedJobId,
     externalModelFile,
@@ -98,6 +100,10 @@ export function Home() {
       <Sidebar {...sidebarProps} />
 
       <main className="flex-1 flex flex-col overflow-y-auto p-6">
+        {inputMode === "pcs-dat" ? (
+          <PcsDatWorkspace />
+        ) : (
+          <>
         {validateVideoId && appMode === "validate" && (
           <VideoValidator
             key={validateRunKey}
@@ -149,6 +155,8 @@ export function Home() {
               isRedetecting={isRedetecting}
             />
           </ErrorBoundary>
+        )}
+          </>
         )}
       </main>
     </>
