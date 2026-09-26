@@ -37,6 +37,7 @@ def test_innov3_provider_returns_pcs_coordinate_proposal() -> None:
             "slot_index": np.asarray([0], dtype=np.int32),
             "layer_index": np.asarray([0], dtype=np.int32),
         },
+        metadata={"housing_merged": True},
     )
     camera = CameraFrame(
         timestamp_ns=100,
@@ -54,10 +55,7 @@ def test_innov3_provider_returns_pcs_coordinate_proposal() -> None:
         adma=None,
     )
 
-    proposals = Innov3DsvtProvider(
-        runtime=FakeRuntime(),
-        housing_merged=True,
-    ).infer(sample)
+    proposals = Innov3DsvtProvider(runtime=FakeRuntime()).infer(sample)
 
     assert len(proposals) == 1
     proposal = proposals[0]
