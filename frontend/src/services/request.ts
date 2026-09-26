@@ -18,7 +18,10 @@ request.interceptors.response.use(
     const message =
       typeof detail === "string"
         ? detail
-        : error.response?.data?.message || error.message || "Request failed";
+        : error.response?.data?.error?.message
+          || error.response?.data?.message
+          || error.message
+          || "Request failed";
     return Promise.reject(new Error(message));
   },
 );
