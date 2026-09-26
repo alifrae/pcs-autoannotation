@@ -42,7 +42,9 @@ class Settings(BaseSettings):
     innov3_dsvt_root: str = ""
     innov3_config_path: str = ""
     innov3_checkpoint_path: str = ""
+    innov3_python: str = ""
     innov3_device: str = "cuda"
+    innov3_timeout_seconds: int = 180
 
     @property
     def resolved_device(self) -> str:
