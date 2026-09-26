@@ -5,17 +5,22 @@ from pathlib import Path
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from ...autoannotation.association import load_pcs_calibration
 from ...autoannotation.pcs_native_dat_source import PcsNativeDatSource
 from ...autoannotation.pcs_native_runtime import (
     PcsNativeUnavailableError,
     inspect_pcs_native,
 )
+from ...autoannotation.pipeline import run_autoannotation_sample
+from ...autoannotation.pcs_scene_objects import write_pcs_scene_object_document
 from ...autoannotation.providers.factory import (
     create_camera_provider,
     create_innov3_provider,
     inspect_innov3_configuration,
 )
 from ...core.exceptions import AppError
+from ...services.locate_anything import get_model_status
+from ...services.sam2_service import get_sam2_status
 
 router = APIRouter(prefix="/api/v1/autoannotation", tags=["autoannotation"])
 
@@ -39,6 +44,15 @@ class DatInnov3Request(DatPathRequest):
     adma_stream_name: str | None = None
 
 
+class DatAutoAnnotationRequest(DatInnov3Request):
+    calibration_path: str = Field(..., min_length=1)
+    recording_key: str = Field(..., min_length=1)
+    recording_sha256: str = Field(..., min_length=64, max_length=64)
+    min_iou: float = Field(default=0.1, ge=0.0, le=1.0)
+    run_id: str | None = None
+    output_path: str | None = None
+
+
 @router.get("/pcs-native/status")
 def pcs_native_status() -> dict:
     return inspect_pcs_native().as_dict()
@@ -50,8 +64,9 @@ def provider_status() -> dict:
         "innov3": inspect_innov3_configuration().as_dict(),
         "camera_baseline": {
             "provider": "LocateAnything-3B+SAM2",
-            "available_in_upstream_engine": True,
             "companion_adapter": True,
+            "vlm": get_model_status(),
+            "sam2": get_sam2_status(),
         },
     }
 
@@ -240,4 +255,70 @@ def dat_camera_proposals(request: DatInnov3Request) -> dict:
             }
             for proposal in proposals
         ],
+    }
+
+
+@router.post("/dat/run")
+def dat_autoannotation_run(request: DatAutoAnnotationRequest) -> dict:
+    """Run the complete v1 proposal, association and PCS-review export path."""
+
+    try:
+        source = PcsNativeDatSource(Path(request.path))
+        sample = source.build_synchronized_sample(
+            request.lidar_index,
+            lidar_stream_name=request.lidar_stream_name,
+            camera_stream_name=request.camera_stream_name,
+            adma_stream_name=request.adma_stream_name,
+            require_adma=True,
+        )
+        calibration = load_pcs_calibration(Path(request.calibration_path))
+        result = run_autoannotation_sample(
+            sample,
+            lidar_provider=create_innov3_provider(),
+            camera_provider=create_camera_provider(),
+            calibration=calibration,
+            recording_key=request.recording_key,
+            recording_sha256=request.recording_sha256,
+            min_iou=request.min_iou,
+            run_id=request.run_id,
+        )
+        saved_path = (
+            None
+            if request.output_path is None
+            else str(
+                write_pcs_scene_object_document(
+                    Path(request.output_path),
+                    result.scene_object_document,
+                )
+            )
+        )
+    except FileNotFoundError as exc:
+        raise AppError(str(exc), 404) from exc
+    except PcsNativeUnavailableError as exc:
+        raise AppError(str(exc), 503) from exc
+    except RuntimeError as exc:
+        raise AppError(str(exc), 503) from exc
+    except (LookupError, ValueError, IndexError) as exc:
+        raise AppError(str(exc), 422) from exc
+
+    return {
+        "sample_id": sample.sample_id,
+        "timestamp_ns": sample.timestamp_ns,
+        "lidar_proposal_count": len(result.lidar_proposals),
+        "camera_proposal_count": len(result.camera_proposals),
+        "matched_count": len(result.association.matches),
+        "unmatched_lidar_count": len(result.association.unmatched_lidar),
+        "unmatched_camera_count": len(result.association.unmatched_camera),
+        "matches": [
+            {
+                "lidar_proposal_id": match.lidar_proposal_id,
+                "camera_proposal_id": match.camera_proposal_id,
+                "association_score": match.score,
+                "fused_proposal_id": match.fused.proposal_id,
+            }
+            for match in result.association.matches
+        ],
+        "scene_object_document": result.scene_object_document,
+        "scene_object_path": saved_path,
+        "calibration_source": calibration.source,
     }
