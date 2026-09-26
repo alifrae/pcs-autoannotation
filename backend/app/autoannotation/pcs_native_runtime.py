@@ -11,7 +11,7 @@ from types import ModuleType
 from typing import Any
 
 
-class PcsNativeUnavailable(RuntimeError):
+class PcsNativeUnavailableError(RuntimeError):
     """Raised when the PCS native dependency is missing or incomplete."""
 
 
@@ -39,7 +39,7 @@ def import_pcs_native() -> ModuleType:
     try:
         return importlib.import_module("point_cloud_studio_native")
     except ImportError as exc:
-        raise PcsNativeUnavailable(
+        raise PcsNativeUnavailableError(
             "PCS Auto-Annotation requires the Point Cloud Studio headless native wheel "
             "(point_cloud_studio_native)."
         ) from exc
@@ -68,7 +68,7 @@ def inspect_pcs_native(native: ModuleType | Any | None = None) -> PcsNativeStatu
             ifscan_decoder=ifscan_decoder,
             adma_source=adma_source,
         )
-    except PcsNativeUnavailable as exc:
+    except PcsNativeUnavailableError as exc:
         return PcsNativeStatus(
             available=False,
             version=None,
@@ -96,7 +96,7 @@ def require_pcs_native(native: ModuleType | Any | None = None) -> ModuleType | A
             )
             if not present
         ]
-        raise PcsNativeUnavailable(
+        raise PcsNativeUnavailableError(
             "Installed PCS native wheel does not satisfy the auto-annotation contract. "
             f"Missing: {', '.join(missing)}"
         )
