@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import pickle
 import sys
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Iterator, Mapping
 from typing import Any
 
 import numpy as np
