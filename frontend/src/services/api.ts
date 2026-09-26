@@ -347,6 +347,31 @@ export async function cancelImport(importId: string): Promise<void> {
 
 // ── PCS DAT Companion ────────────────────────────
 
+interface RawPcsInnov3Proposal {
+  proposal_id: string;
+  class_name: string;
+  bbox_3d: null | {
+    center_x: number;
+    center_y: number;
+    center_z: number;
+    length: number;
+    width: number;
+    height: number;
+    yaw_rad: number;
+  };
+  confidence: number | null;
+  evidence: Array<Record<string, unknown>>;
+}
+
+interface RawPcsCameraProposal {
+  proposal_id: string;
+  class_name: string;
+  bbox_2d: null | { x1: number; y1: number; x2: number; y2: number };
+  mask_polygon: number[][] | null;
+  confidence: number | null;
+  evidence: Array<Record<string, unknown>>;
+}
+
 interface PcsDatRequest {
   path: string;
   lidarIndex: number;
@@ -454,7 +479,7 @@ export async function fetchPcsDatInnov3Proposals(
     sampleId: data.sample_id,
     timestampNs: data.timestamp_ns,
     provider: data.provider,
-    proposals: (data.proposals ?? []).map((proposal: any) => ({
+    proposals: ((data.proposals ?? []) as RawPcsInnov3Proposal[]).map((proposal) => ({
       proposalId: proposal.proposal_id,
       className: proposal.class_name,
       bbox3d: proposal.bbox_3d == null ? null : {
@@ -498,7 +523,7 @@ export async function fetchPcsDatCameraProposals(
     timestampNs: data.timestamp_ns,
     cameraTimestampNs: data.camera_timestamp_ns,
     provider: data.provider,
-    proposals: (data.proposals ?? []).map((proposal: any) => ({
+    proposals: ((data.proposals ?? []) as RawPcsCameraProposal[]).map((proposal) => ({
       proposalId: proposal.proposal_id,
       className: proposal.class_name,
       bbox2d: proposal.bbox_2d == null ? null : {
