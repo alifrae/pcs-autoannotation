@@ -38,7 +38,12 @@ class Innov3RawDetections:
 
 
 class Innov3InferenceRuntime(Protocol):
-    def infer(self, points_xyzi: NDArray[np.float32]) -> Innov3RawDetections:
+    def infer(
+        self,
+        points_xyzi: NDArray[np.float32],
+        *,
+        sample_id: str = "",
+    ) -> Innov3RawDetections:
         ...
 
 
