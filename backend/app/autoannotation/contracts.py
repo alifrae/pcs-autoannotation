@@ -94,6 +94,13 @@ class ProviderEvidence:
 
 @dataclass(frozen=True, slots=True)
 class ObjectProposal:
+    """Immutable machine-generated annotation proposal.
+
+    Human review state is intentionally not stored on this object. Review and
+    correction records reference proposal_id and live in a separate domain
+    record so the original machine output remains available for quality metrics.
+    """
+
     proposal_id: str
     sample_id: str
     class_name: str
@@ -103,7 +110,43 @@ class ObjectProposal:
     evidence: Sequence[ProviderEvidence] = field(default_factory=tuple)
     association_score: float | None = None
     fused_confidence: float | None = None
-    disposition: ReviewDisposition = ReviewDisposition.PROPOSED
+
+
+@dataclass(frozen=True, slots=True)
+class AnnotationRevision:
+    """Complete human-corrected annotation state for a modified proposal."""
+
+    class_name: str
+    bbox_2d: BoundingBox2D | None = None
+    bbox_3d: BoundingBox3D | None = None
+    mask_polygon: Sequence[tuple[float, float]] | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.class_name.strip():
+            raise ValueError("Annotation revision class_name must not be empty")
+
+
+@dataclass(frozen=True, slots=True)
+class ProposalReview:
+    """Append-only human decision referencing an immutable machine proposal."""
+
+    review_id: str
+    proposal_id: str
+    sample_id: str
+    disposition: ReviewDisposition
+    reviewed_at_ns: int
+    revision: AnnotationRevision | None = None
+    reviewer_id: str | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.disposition == ReviewDisposition.PROPOSED:
+            raise ValueError("PROPOSED is machine state, not a human review decision")
+        if self.disposition == ReviewDisposition.MODIFIED and self.revision is None:
+            raise ValueError("MODIFIED review requires a complete annotation revision")
+        if self.disposition != ReviewDisposition.MODIFIED and self.revision is not None:
+            raise ValueError("Only MODIFIED review may contain an annotation revision")
 
 
 class AnnotationProvider(Protocol):
@@ -112,4 +155,18 @@ class AnnotationProvider(Protocol):
         ...
 
     def infer(self, sample: SynchronizedSample) -> Sequence[ObjectProposal]:
+        ...
+
+
+class BatchAnnotationProvider(Protocol):
+    """Optional provider capability for efficient multi-sample inference."""
+
+    @property
+    def identity(self) -> ProviderIdentity:
+        ...
+
+    def infer_batch(
+        self,
+        samples: Sequence[SynchronizedSample],
+    ) -> Sequence[Sequence[ObjectProposal]]:
         ...
