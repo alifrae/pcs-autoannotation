@@ -12,6 +12,8 @@ jobs:
   backend:
     name: Backend (Python)
     runs-on: ubuntu-latest
+    env:
+      PCS_NATIVE_REQUIRED: "false"
 
     steps:
       - name: Checkout code
