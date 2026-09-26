@@ -59,7 +59,7 @@ def innov3_identity() -> ProviderIdentity:
 def prepare_innov3_input(
     frame: LidarFrame,
     *,
-    housing_merged: bool,
+    housing_merged: bool | None = None,
     external_echo_ordinal: int = INNOV3_RAW_EXTERNAL_ECHO_ORDINAL,
 ) -> Innov3PreparedInput:
     """Adapt a PCS-native frame to the frozen internal Innov3 input contract.
@@ -70,6 +70,14 @@ def prepare_innov3_input(
 
     if external_echo_ordinal < 0:
         raise ValueError("external_echo_ordinal must be non-negative")
+
+    if housing_merged is None:
+        native_value = frame.metadata.get("housing_merged")
+        if not isinstance(native_value, bool):
+            raise ValueError(
+                "Innov3 requires authoritative PCS-native housing_merged metadata"
+            )
+        housing_merged = native_value
 
     echo = _attribute(frame, "echo_index")
     peak = _attribute(frame, "peak", "intensity")
