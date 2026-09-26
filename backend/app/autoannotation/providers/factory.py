@@ -90,4 +90,5 @@ def create_camera_provider(
         categories=config.autoannotation_camera_categories,
         use_sam2=config.autoannotation_camera_use_sam2,
         sam2_score_threshold=config.autoannotation_sam2_score_threshold,
+        release_vlm_before_sam2=config.autoannotation_camera_release_vlm_before_sam2,
     )
