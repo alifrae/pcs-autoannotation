@@ -177,6 +177,8 @@ jobs:
         run: |
           set -euo pipefail
           "$DECODER_PYTHON" -m pip install --quiet --force-reinstall "$PCS_NATIVE_WHEEL_REAL"
+          "$DECODER_PYTHON" -c "import pyarrow" 2>/dev/null || \
+            "$DECODER_PYTHON" -m pip install --quiet "pyarrow>=18.0.0"
           "$DECODER_PYTHON" - <<'PY'
           import point_cloud_studio_native as native
 
@@ -217,7 +219,10 @@ jobs:
           summaries = []
           prepared_path = Path("artifacts/highway-smoke/innov3-input.npz")
           for n, index in enumerate(indices):
-              sample = source.build_synchronized_sample(index)
+              sample = source.build_synchronized_sample(
+                  index,
+                  camera_stream_name="Genicam2",
+              )
               summary = {
                   "index": index,
                   "sample_id": sample.sample_id,
@@ -238,10 +243,7 @@ jobs:
               print(json.dumps(summary, sort_keys=True))
 
               if n == 0:
-                  prepared = prepare_innov3_input(
-                      sample.lidar,
-                      housing_merged=True,
-                  )
+                  prepared = prepare_innov3_input(sample.lidar)
                   np.savez_compressed(
                       prepared_path,
                       points_xyzi=prepared.points_xyzi,
