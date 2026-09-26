@@ -81,3 +81,91 @@ export interface ListResponse<T> {
   page: number;
   pageSize: number;
 }
+
+
+export interface PcsDatStream {
+  name: string;
+  streamId: number;
+  kind: string;
+  frameCount: number;
+  width: number | null;
+  height: number | null;
+  fps: number | null;
+}
+
+export interface PcsDatInspection {
+  path: string;
+  streams: PcsDatStream[];
+  lidarStreams: string[];
+  cameraStreams: string[];
+  admaStreams: string[];
+  admaNativeApi: boolean;
+}
+
+export interface PcsDatSampleSummary {
+  sampleId: string;
+  timestampNs: number;
+  lidar: {
+    pointCount: number;
+    attributes: string[];
+    metadata: Record<string, unknown>;
+  };
+  camera: {
+    timestampNs: number;
+    width: number;
+    height: number;
+    encoding: string;
+    sourceId: string;
+    syncDeltaNs: number | null;
+  };
+  adma: null | {
+    timestampNs: number;
+    syncStatus: string | null;
+    syncDeltaNs: number | null;
+    syncToleranceNs: number | null;
+    sampleIndex: number | null;
+    streamName: string | null;
+    values: Record<string, unknown>;
+  };
+  sourceMetadata: Record<string, unknown>;
+}
+
+export interface PcsCameraProposal {
+  proposalId: string;
+  className: string;
+  bbox2d: null | { x1: number; y1: number; x2: number; y2: number };
+  maskPolygon: number[][] | null;
+  confidence: number | null;
+  evidence: Array<Record<string, unknown>>;
+}
+
+export interface PcsCameraProposalResult {
+  sampleId: string;
+  timestampNs: number;
+  cameraTimestampNs: number;
+  provider: string;
+  proposals: PcsCameraProposal[];
+}
+
+export interface PcsInnov3Proposal {
+  proposalId: string;
+  className: string;
+  bbox3d: null | {
+    centerX: number;
+    centerY: number;
+    centerZ: number;
+    length: number;
+    width: number;
+    height: number;
+    yawRad: number;
+  };
+  confidence: number | null;
+  evidence: Array<Record<string, unknown>>;
+}
+
+export interface PcsInnov3ProposalResult {
+  sampleId: string;
+  timestampNs: number;
+  provider: string;
+  proposals: PcsInnov3Proposal[];
+}
