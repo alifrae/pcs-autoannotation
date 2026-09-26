@@ -87,9 +87,7 @@ class LocateAnythingSam2Provider:
                         score_threshold=self.sam2_score_threshold,
                     )
                 except Exception:
-                    logger.exception(
-                        "SAM2 segmentation failed; keeping LocateAnything boxes"
-                    )
+                    logger.exception("SAM2 segmentation failed; keeping LocateAnything boxes")
                     polygons = []
 
             proposals: list[ObjectProposal] = []
@@ -151,9 +149,7 @@ def camera_frame_to_pil(frame: CameraFrame) -> Image.Image:
     if encoding == "mono8":
         expected = frame.width * frame.height
         if raw.size != expected:
-            raise ValueError(
-                f"mono8 camera payload size mismatch: {raw.size} != {expected}"
-            )
+            raise ValueError(f"mono8 camera payload size mismatch: {raw.size} != {expected}")
         gray = raw.reshape(frame.height, frame.width)
         return Image.fromarray(gray, mode="L").convert("RGB")
 
@@ -167,16 +163,10 @@ def camera_frame_to_pil(frame: CameraFrame) -> Image.Image:
         channel_count, swap_rb, drop_alpha = channels[encoding]
         expected = frame.width * frame.height * channel_count
         if raw.size != expected:
-            raise ValueError(
-                f"{encoding} camera payload size mismatch: {raw.size} != {expected}"
-            )
+            raise ValueError(f"{encoding} camera payload size mismatch: {raw.size} != {expected}")
         pixels = raw.reshape(frame.height, frame.width, channel_count)
         if swap_rb:
-            pixels = (
-                pixels[:, :, [2, 1, 0]]
-                if channel_count == 3
-                else pixels[:, :, [2, 1, 0, 3]]
-            )
+            pixels = pixels[:, :, [2, 1, 0]] if channel_count == 3 else pixels[:, :, [2, 1, 0, 3]]
         if drop_alpha:
             pixels = pixels[:, :, :3]
         return Image.fromarray(np.ascontiguousarray(pixels), mode="RGB")

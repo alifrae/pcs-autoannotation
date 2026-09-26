@@ -51,13 +51,9 @@ def inspect_pcs_native(native: ModuleType | Any | None = None) -> PcsNativeStatu
         transport = getattr(module, "transport", None)
         codec = getattr(module, "codec", None)
         dat_reader = bool(transport and hasattr(transport, "NativeDatReader"))
-        dat_image_source = bool(
-            transport and hasattr(transport, "NativeDatImageStreamSource")
-        )
+        dat_image_source = bool(transport and hasattr(transport, "NativeDatImageStreamSource"))
         ifscan_decoder = bool(codec and hasattr(codec, "decode_ifscan_payload"))
-        adma_source = bool(
-            transport and hasattr(transport, "NativeDatAdmaStreamSource")
-        )
+        adma_source = bool(transport and hasattr(transport, "NativeDatAdmaStreamSource"))
         return PcsNativeStatus(
             available=dat_reader and dat_image_source and ifscan_decoder and adma_source,
             version=str(getattr(module, "__version__", "")) or None,
@@ -108,9 +104,7 @@ def load_pcs_native_manifest(path: str | Path) -> dict[str, Any]:
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise PcsNativeManifestError(
-            f"Cannot read PCS native manifest: {manifest_path}"
-        ) from exc
+        raise PcsNativeManifestError(f"Cannot read PCS native manifest: {manifest_path}") from exc
     if manifest.get("schema") != "pcs-native-artifact/v1":
         raise PcsNativeManifestError("Unsupported PCS native manifest schema")
     if manifest.get("module") != "point_cloud_studio_native":
@@ -147,8 +141,7 @@ def validate_pcs_native_manifest(
         )
     if mismatches:
         raise PcsNativeManifestError(
-            "PCS native manifest does not match the installed runtime: "
-            + "; ".join(mismatches)
+            "PCS native manifest does not match the installed runtime: " + "; ".join(mismatches)
         )
 
 

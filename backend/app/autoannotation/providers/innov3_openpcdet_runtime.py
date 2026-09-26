@@ -195,14 +195,10 @@ def _cfg_value(value: Any, key: str, default: Any = None) -> Any:
 def _validate_reference_profile(cfg: Any) -> None:
     classes = tuple(str(value) for value in cfg.CLASS_NAMES)
     if classes != INNOV3_CLASSES:
-        raise RuntimeError(
-            f"Innov3 class contract mismatch: {classes!r} != {INNOV3_CLASSES!r}"
-        )
+        raise RuntimeError(f"Innov3 class contract mismatch: {classes!r} != {INNOV3_CLASSES!r}")
 
     data_config = _cfg_value(cfg, "DATA_CONFIG")
-    model_range = tuple(
-        float(value) for value in _cfg_value(data_config, "POINT_CLOUD_RANGE", ())
-    )
+    model_range = tuple(float(value) for value in _cfg_value(data_config, "POINT_CLOUD_RANGE", ()))
     if len(model_range) != 6 or not np.allclose(
         model_range,
         INNOV3_POINT_CLOUD_RANGE_M,

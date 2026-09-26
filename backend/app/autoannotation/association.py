@@ -53,13 +53,9 @@ class CameraLidarCalibration:
         if not all(math.isfinite(float(value)) for value in values):
             raise ValueError("calibration transform values must be finite")
         if self.distortion_model.casefold() != "none":
-            raise ValueError(
-                "v1 association requires rectified/no-distortion PCS calibration"
-            )
+            raise ValueError("v1 association requires rectified/no-distortion PCS calibration")
         if self.distortion_coefficients:
-            raise ValueError(
-                "v1 association requires empty distortion coefficients"
-            )
+            raise ValueError("v1 association requires empty distortion coefficients")
 
     @property
     def rotation(self) -> np.ndarray:
@@ -111,9 +107,7 @@ def load_pcs_calibration(path: str | Path) -> CameraLidarCalibration:
         try:
             import yaml
         except ImportError as exc:
-            raise RuntimeError(
-                "YAML PCS calibration requires PyYAML"
-            ) from exc
+            raise RuntimeError("YAML PCS calibration requires PyYAML") from exc
         payload = yaml.safe_load(text)
 
     if not isinstance(payload, Mapping):
@@ -184,14 +178,10 @@ def associate_proposals(
     return AssociationResult(
         matches=tuple(matches),
         unmatched_lidar=tuple(
-            proposal
-            for index, proposal in enumerate(lidar_proposals)
-            if index not in used_lidar
+            proposal for index, proposal in enumerate(lidar_proposals) if index not in used_lidar
         ),
         unmatched_camera=tuple(
-            proposal
-            for index, proposal in enumerate(camera_proposals)
-            if index not in used_camera
+            proposal for index, proposal in enumerate(camera_proposals) if index not in used_camera
         ),
     )
 
@@ -289,9 +279,7 @@ def _from_overlay_session(
     intrinsics = _mapping(payload, "intrinsics")
     extrinsics = _mapping(payload, "extrinsics")
     distortion_model = str(intrinsics.get("distortion_model") or "none")
-    coefficients = tuple(
-        float(value) for value in intrinsics.get("distortion_coefficients", ())
-    )
+    coefficients = tuple(float(value) for value in intrinsics.get("distortion_coefficients", ()))
     rotation = _euler_rotation(
         roll=float(extrinsics["roll_rad"]),
         pitch=float(extrinsics["pitch_rad"]),
@@ -369,10 +357,7 @@ def _fuse(
         if evidence.confidence is not None
     ]
     fused_confidence = float(np.mean(confidences)) if confidences else None
-    seed = (
-        f"{lidar.sample_id}|{lidar.proposal_id}|{camera.proposal_id}|"
-        f"{score:.12f}"
-    )
+    seed = f"{lidar.sample_id}|{lidar.proposal_id}|{camera.proposal_id}|{score:.12f}"
     proposal_id = hashlib.sha256(seed.encode()).hexdigest()[:24]
     association_evidence = ProviderEvidence(
         provider=lidar.evidence[0].provider if lidar.evidence else camera.evidence[0].provider,

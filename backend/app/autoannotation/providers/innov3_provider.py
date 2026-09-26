@@ -65,9 +65,7 @@ class Innov3DsvtProvider:
                             modality=SensorModality.LIDAR,
                             confidence=float(score),
                             metadata={
-                                "selected_source_points": int(
-                                    len(prepared.source_indices)
-                                ),
+                                "selected_source_points": int(len(prepared.source_indices)),
                                 "source_point_count": prepared.source_point_count,
                                 "semantic_echo_id": prepared.semantic_echo_id,
                                 "coordinate_contract": "innov3_reference_flip_yz",

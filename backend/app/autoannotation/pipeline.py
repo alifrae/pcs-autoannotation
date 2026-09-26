@@ -85,10 +85,7 @@ def _validate_calibration_matches_sample(
     calibration: CameraLidarCalibration,
     sample: SynchronizedSample,
 ) -> None:
-    if (
-        calibration.width != sample.camera.width
-        or calibration.height != sample.camera.height
-    ):
+    if calibration.width != sample.camera.width or calibration.height != sample.camera.height:
         raise ValueError(
             "PCS calibration image size does not match synchronized camera frame: "
             f"calibration={calibration.width}x{calibration.height}, "
@@ -102,9 +99,7 @@ def _validate_sample_ids(
     provider_name: str,
 ) -> None:
     mismatched = [
-        proposal.proposal_id
-        for proposal in proposals
-        if proposal.sample_id != sample.sample_id
+        proposal.proposal_id for proposal in proposals if proposal.sample_id != sample.sample_id
     ]
     if mismatched:
         raise ValueError(

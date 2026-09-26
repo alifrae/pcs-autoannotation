@@ -47,9 +47,7 @@ def build_pcs_scene_object_document(
         f"{recording_key}|{recording_sha256}|{source_key}|{frame_index}|"
         f"{'|'.join(sorted(object_ids))}"
     )
-    document_id = "pcs-autoannotation-" + hashlib.sha256(
-        document_seed.encode()
-    ).hexdigest()[:24]
+    document_id = "pcs-autoannotation-" + hashlib.sha256(document_seed.encode()).hexdigest()[:24]
 
     document = {
         "schema": SCHEMA,
@@ -215,9 +213,7 @@ def review_progress(document: Mapping[str, Any]) -> dict[str, int | float | None
         "corrected_count": corrected,
         "rejected_count": rejected,
         "manual_annotation_count": manual,
-        "accept_without_edit_rate": (
-            None if not denominator else accepted / denominator
-        ),
+        "accept_without_edit_rate": (None if not denominator else accepted / denominator),
         "correction_rate": None if not denominator else corrected / denominator,
         "rejection_rate": None if not denominator else rejected / denominator,
     }
@@ -241,18 +237,10 @@ def _hypothesis(
         raise ValueError("PCS hypotheses require a 3D box")
     providers = sorted({item.provider.provider_id for item in proposal.evidence})
     model_versions = sorted(
-        {
-            item.provider.model_version
-            for item in proposal.evidence
-            if item.provider.model_version
-        }
+        {item.provider.model_version for item in proposal.evidence if item.provider.model_version}
     )
     model_shas = sorted(
-        {
-            item.provider.model_sha256
-            for item in proposal.evidence
-            if item.provider.model_sha256
-        }
+        {item.provider.model_sha256 for item in proposal.evidence if item.provider.model_sha256}
     )
     details = {
         "providers": ",".join(providers) or "unknown",
@@ -266,9 +254,7 @@ def _hypothesis(
     confidence = proposal.fused_confidence
     if confidence is None:
         available = [
-            float(item.confidence)
-            for item in proposal.evidence
-            if item.confidence is not None
+            float(item.confidence) for item in proposal.evidence if item.confidence is not None
         ]
         confidence = sum(available) / len(available) if available else None
     if confidence is not None:
@@ -300,9 +286,7 @@ def _hypothesis(
             "details": details,
         },
         "attributes": {
-            "association": (
-                "matched" if proposal.association_score is not None else "lidar_only"
-            )
+            "association": ("matched" if proposal.association_score is not None else "lidar_only")
         },
     }
 

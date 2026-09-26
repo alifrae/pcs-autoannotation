@@ -59,9 +59,7 @@ def create_innov3_provider(
 ) -> Innov3DsvtProvider:
     status = inspect_innov3_configuration(config)
     if not status.configured:
-        raise RuntimeError(
-            "Innov3 is not configured. Missing: " + ", ".join(status.missing)
-        )
+        raise RuntimeError("Innov3 is not configured. Missing: " + ", ".join(status.missing))
 
     runtime = (
         Innov3SubprocessRuntime(

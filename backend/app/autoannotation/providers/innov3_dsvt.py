@@ -9,9 +9,7 @@ from numpy.typing import NDArray
 from ..contracts import LidarFrame, ProviderIdentity
 
 INNOV3_MODEL_ID = "dsvt-internal-innov3"
-INNOV3_CHECKPOINT_SHA256 = (
-    "bdb7779c879094b1479ed3169025ee8eb1a391ec4c9d3a6c7fd2e06b8eff6c1f"
-)
+INNOV3_CHECKPOINT_SHA256 = "bdb7779c879094b1479ed3169025ee8eb1a391ec4c9d3a6c7fd2e06b8eff6c1f"
 INNOV3_CLASSES = ("Car", "Truck")
 INNOV3_POINT_CLOUD_RANGE_M = (-10.0, -40.64, -5.0, 102.64, 41.28, 4.0)
 INNOV3_VOXEL_SIZE_M = (0.32, 0.32, 0.1875)
@@ -43,8 +41,7 @@ class Innov3InferenceRuntime(Protocol):
         points_xyzi: NDArray[np.float32],
         *,
         sample_id: str = "",
-    ) -> Innov3RawDetections:
-        ...
+    ) -> Innov3RawDetections: ...
 
 
 def innov3_identity() -> ProviderIdentity:
@@ -74,9 +71,7 @@ def prepare_innov3_input(
     if housing_merged is None:
         native_value = frame.metadata.get("housing_merged")
         if not isinstance(native_value, bool):
-            raise ValueError(
-                "Innov3 requires authoritative PCS-native housing_merged metadata"
-            )
+            raise ValueError("Innov3 requires authoritative PCS-native housing_merged metadata")
         housing_merged = native_value
 
     echo = _attribute(frame, "echo_index")
@@ -133,8 +128,7 @@ def _attribute(frame: LidarFrame, *names: str) -> np.ndarray | None:
         if value is not None:
             return np.asarray(value)
     normalized = {
-        "".join(ch.lower() for ch in key if ch.isalnum()): key
-        for key in frame.attributes
+        "".join(ch.lower() for ch in key if ch.isalnum()): key for key in frame.attributes
     }
     for name in names:
         normalized_name = "".join(ch.lower() for ch in name if ch.isalnum())

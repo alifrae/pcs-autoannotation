@@ -220,9 +220,7 @@ def _decode_ifscan10(
 
     reflectivity = compacted.get("reflectivity")
     if reflectivity is not None:
-        attributes["reflectivity"] = np.ascontiguousarray(
-            np.asarray(reflectivity, dtype=np.uint8)
-        )
+        attributes["reflectivity"] = np.ascontiguousarray(np.asarray(reflectivity, dtype=np.uint8))
 
     metadata = {
         "decoder_path": "pcs_native_ifscan10_arrow_geometry",
@@ -255,10 +253,7 @@ def _import_arrow_batch(capsule_pair: tuple[Any, Any]) -> Any:
     if importer is None:
         raise RuntimeError("installed PyArrow does not support RecordBatch._import_from_c")
 
-    if (
-        type(array_capsule).__name__ == "PyCapsule"
-        and type(schema_capsule).__name__ == "PyCapsule"
-    ):
+    if type(array_capsule).__name__ == "PyCapsule" and type(schema_capsule).__name__ == "PyCapsule":
         get_ptr = ctypes.pythonapi.PyCapsule_GetPointer
         get_ptr.restype = ctypes.c_void_p
         get_ptr.argtypes = [ctypes.py_object, ctypes.c_char_p]
@@ -296,9 +291,7 @@ def _reshape_sle(
         array = array.astype(dtype, copy=False)
     if array.size != num_slots * num_layers * num_echoes:
         return None
-    return np.ascontiguousarray(
-        array.reshape(num_slots, num_echoes, num_layers).transpose(0, 2, 1)
-    )
+    return np.ascontiguousarray(array.reshape(num_slots, num_echoes, num_layers).transpose(0, 2, 1))
 
 
 def _reshape_grid(
@@ -347,9 +340,7 @@ def _angle_grid(
 def _decode_distance(raw_sle: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     raw = np.asarray(raw_sle, dtype=np.uint16)
     signal = np.bitwise_and(raw, _IFSCAN10_DISTANCE_SIGNAL_MASK)
-    invalid = (raw == _IFSCAN10_DISTANCE_INVALID) | (
-        signal == _IFSCAN10_DISTANCE_SIGNAL_MASK
-    )
+    invalid = (raw == _IFSCAN10_DISTANCE_INVALID) | (signal == _IFSCAN10_DISTANCE_SIGNAL_MASK)
     return (
         np.ascontiguousarray(signal.astype(np.float32)),
         np.ascontiguousarray(invalid),

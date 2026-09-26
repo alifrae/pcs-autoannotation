@@ -438,6 +438,7 @@ def detect(image_path: str | Path, categories: list[str]) -> dict:
     with Image.open(image_path) as source:
         return detect_image(source, categories, source_label=str(image_path))
 
+
 def get_model_status() -> dict:
     """Return current model state for the status endpoint."""
     with _state_lock:

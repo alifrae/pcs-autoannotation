@@ -57,9 +57,7 @@ def qualify_review_document(
         raise ValueError("human_seconds must be non-negative")
     reviewed = int(raw["reviewed_count"])
     seconds_per_object = (
-        None
-        if human_seconds is None or reviewed == 0
-        else float(human_seconds) / reviewed
+        None if human_seconds is None or reviewed == 0 else float(human_seconds) / reviewed
     )
     return BaselineQualification(
         hypothesis_count=int(raw["hypothesis_count"]),

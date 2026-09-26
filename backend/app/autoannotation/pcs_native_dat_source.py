@@ -232,9 +232,7 @@ class PcsNativeDatSource:
 
         selected_lidar_stream = str(lidar.metadata.get("stream_name") or "")
         selected_camera_stream = str(camera.metadata.get("stream_name") or "")
-        selected_adma_stream = (
-            "" if adma is None else str(adma.metadata.get("stream_name") or "")
-        )
+        selected_adma_stream = "" if adma is None else str(adma.metadata.get("stream_name") or "")
         sample_seed = (
             f"{self.path.resolve()}|{lidar.timestamp_ns}|"
             f"{selected_lidar_stream}|{selected_camera_stream}|{selected_adma_stream}"

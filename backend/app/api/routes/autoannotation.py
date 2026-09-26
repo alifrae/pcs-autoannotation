@@ -11,8 +11,8 @@ from ...autoannotation.pcs_native_runtime import (
     PcsNativeUnavailableError,
     inspect_pcs_native,
 )
-from ...autoannotation.pipeline import run_autoannotation_sample
 from ...autoannotation.pcs_scene_objects import write_pcs_scene_object_document
+from ...autoannotation.pipeline import run_autoannotation_sample
 from ...autoannotation.providers.factory import (
     create_camera_provider,
     create_innov3_provider,
@@ -178,9 +178,7 @@ def dat_innov3_proposals(request: DatInnov3Request) -> dict:
                         "yaw_rad": proposal.bbox_3d.yaw_rad,
                     }
                 ),
-                "confidence": (
-                    proposal.evidence[0].confidence if proposal.evidence else None
-                ),
+                "confidence": (proposal.evidence[0].confidence if proposal.evidence else None),
                 "evidence": [
                     {
                         "provider_id": evidence.provider.provider_id,
@@ -240,9 +238,7 @@ def dat_camera_proposals(request: DatInnov3Request) -> dict:
                     }
                 ),
                 "mask_polygon": proposal.mask_polygon,
-                "confidence": (
-                    proposal.evidence[0].confidence if proposal.evidence else None
-                ),
+                "confidence": (proposal.evidence[0].confidence if proposal.evidence else None),
                 "evidence": [
                     {
                         "provider_id": evidence.provider.provider_id,
