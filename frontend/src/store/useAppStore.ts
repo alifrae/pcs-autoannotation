@@ -21,8 +21,8 @@ interface AppState {
   setSam3Text: (v: string) => void;
 
   // Upload State
-  inputMode: "image" | "video";
-  setInputMode: (mode: "image" | "video") => void;
+  inputMode: "image" | "video" | "pcs-dat";
+  setInputMode: (mode: "image" | "video" | "pcs-dat") => void;
   files: File[];
   setFiles: (files: File[]) => void;
   previewUrl: string | null;
