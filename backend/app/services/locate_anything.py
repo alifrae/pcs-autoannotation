@@ -435,6 +435,13 @@ def detect_image(
 
 
 def detect(image_path: str | Path, categories: list[str]) -> dict:
+    # Preserve the existing API contract: model/device loading errors are
+    # reported before file I/O errors. detect_image() reuses the loaded worker.
+    try:
+        _get_worker()
+    except Exception as exc:
+        raise InferenceError(f"Model loading failed: {exc}") from exc
+
     with Image.open(image_path) as source:
         return detect_image(source, categories, source_label=str(image_path))
 
