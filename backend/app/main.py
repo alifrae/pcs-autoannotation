@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .api.routes.autoannotation import router as autoannotation_router
 from .api.routes.detection import router as detection_router
 from .api.routes.export import router as export_router
 from .api.routes.import_dataset import router as import_router
@@ -112,6 +113,7 @@ async def general_exception_handler(_request: Request, exc: Exception) -> JSONRe
     )
 
 
+app.include_router(autoannotation_router)
 app.include_router(detection_router)
 app.include_router(export_router)
 app.include_router(predict_router)
