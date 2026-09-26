@@ -178,9 +178,16 @@ VLM-AutoYOLO:
 This baseline is experimental. LocateAnything's model license must be reviewed
 before any commercial/product deployment.
 
-The existing camera workflow should be adapted behind the generic annotation
-provider contract without breaking the inherited image/video annotation
-capabilities.
+The existing camera engine is now adapted behind the generic annotation
+provider contract without changing the inherited image/video workflow. The
+companion adapter accepts PCS-native JPEG/PNG and supported 8-bit raw camera
+encodings in memory, runs LocateAnything, optionally refines detections with
+SAM2, and emits `ObjectProposal` records. It does not introduce a second camera
+reader.
+
+The inherited LocateAnything confidence parser was also corrected so a
+`<conf>` token applies to the immediately preceding bounding box, matching the
+model output contract.
 
 ## Innov3 DSVT LiDAR proposals
 
@@ -311,8 +318,10 @@ annotation trustworthiness.
   OpenPCDet runtime, provider and DAT-to-proposal endpoint are present. The path
   still needs a real configured workstation run and PCS visual validation of
   returned boxes.
-- **LocateAnything/SAM2 Camera Provider — existing engine available, companion
-  adapter pending.**
+- **LocateAnything/SAM2 Camera Provider — implemented foundation.** PCS-native
+  camera frames are converted in memory using their authoritative encoding,
+  LocateAnything/SAM2 produces 2D proposals, and a DAT-to-camera-proposal
+  endpoint is present. Real-DAT/model qualification remains pending.
 - **Camera–LiDAR Association — pending.**
 - **PCS Review and Correction — pending.**
 - **Auto-Annotation Baseline Qualification — pending.**
