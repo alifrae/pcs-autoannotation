@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from ...core.config import Settings, settings
+from .camera_provider import LocateAnythingSam2Provider
 from .innov3_openpcdet_runtime import Innov3OpenPcdetRuntime
 from .innov3_provider import Innov3DsvtProvider
 
@@ -74,4 +75,14 @@ def create_innov3_provider(
     return Innov3DsvtProvider(
         runtime=runtime,
         housing_merged=config.innov3_housing_merged,
+    )
+
+
+def create_camera_provider(
+    config: Settings = settings,
+) -> LocateAnythingSam2Provider:
+    return LocateAnythingSam2Provider(
+        categories=config.autoannotation_camera_categories,
+        use_sam2=config.autoannotation_camera_use_sam2,
+        sam2_score_threshold=config.autoannotation_sam2_score_threshold,
     )
