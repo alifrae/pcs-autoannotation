@@ -33,6 +33,12 @@ class DatSampleSummaryRequest(DatPathRequest):
     require_adma: bool = True
 
 
+class DatInnov3Request(DatPathRequest):
+    lidar_index: int = Field(default=0, ge=0)
+    lidar_stream_name: str | None = None
+    camera_stream_name: str | None = None
+
+
 @router.get("/pcs-native/status")
 def pcs_native_status() -> dict:
     return inspect_pcs_native().as_dict()
@@ -100,7 +106,7 @@ def dat_sample_summary(request: DatSampleSummaryRequest) -> dict:
 
 
 @router.post("/dat/innov3-proposals")
-def dat_innov3_proposals(request: DatSampleSummaryRequest) -> dict:
+def dat_innov3_proposals(request: DatInnov3Request) -> dict:
     """Run Innov3 on one PCS-native DAT sample.
 
     ADMA is not required for the LiDAR model execution itself. The complete
