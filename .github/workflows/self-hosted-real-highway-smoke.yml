@@ -118,13 +118,27 @@ jobs:
           fi
 
           if [[ "$artifact_ok" != "true" ]]; then
-            echo "Qualified artifact download unavailable; building exact PCS commit locally."
+            echo "Cross-repo artifact unavailable; reusing local PCS object store."
             PCS_SOURCE="$RUNNER_TEMP/pcs-native-source"
             rm -rf "$PCS_SOURCE"
-            git init "$PCS_SOURCE"
-            git -C "$PCS_SOURCE" remote add origin "https://github.com/$PCS_REPOSITORY.git"
-            git -C "$PCS_SOURCE" -c credential.helper= fetch --depth 1 origin "$PCS_COMMIT"
-            git -C "$PCS_SOURCE" checkout --detach FETCH_HEAD
+
+            PCS_LOCAL=""
+            for candidate in               /home/o-ralilou/github-runners/*/_work/cb574_point_cloud_sil/cb574_point_cloud_sil               /home/o-ralilou/source/GitHub/cb574_point_cloud_sil               /home/o-ralilou/source/GitHub/point_cloud_studio; do
+              [[ -d "$candidate/.git" || -f "$candidate/.git" ]] || continue
+              if git -C "$candidate" cat-file -e "$PCS_COMMIT^{commit}" 2>/dev/null; then
+                PCS_LOCAL="$candidate"
+                break
+              fi
+            done
+
+            if [[ -z "$PCS_LOCAL" ]]; then
+              echo "No local PCS checkout contains required commit $PCS_COMMIT"
+              find /home/o-ralilou/github-runners -maxdepth 5 -type d                 \( -name cb574_point_cloud_sil -o -name point_cloud_studio \)                 -print 2>/dev/null || true
+              exit 1
+            fi
+
+            echo "pcs_local_checkout=$PCS_LOCAL"
+            git -C "$PCS_LOCAL" worktree add --detach "$PCS_SOURCE" "$PCS_COMMIT"
 
             python -m pip install --quiet --upgrade pip maturin
             mkdir -p "$NATIVE_DIR/artifact"
@@ -132,6 +146,7 @@ jobs:
               cd "$PCS_SOURCE/bindings"
               python -m maturin build                 --profile native-release                 --locked                 --strip                 --out "$NATIVE_DIR/artifact"                 --interpreter python                 --no-default-features                 --features extension-module,transport
             )
+            git -C "$PCS_LOCAL" worktree remove --force "$PCS_SOURCE" || true
           fi
 
           WHEEL="$(find "$NATIVE_DIR/artifact" -type f -name '*.whl' -print -quit)"
