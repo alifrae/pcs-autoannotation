@@ -32,7 +32,10 @@ class Settings(BaseSettings):
     sam2_model_id: str = "facebook/sam2.1-hiera-base-plus"
     sam2_checkpoint_path: str = ""
 
-    # PCS Auto-Annotation companion / Innov3 DSVT
+    # PCS Auto-Annotation companion
+    pcs_native_required: bool = True
+
+    # Innov3 DSVT
     innov3_dsvt_root: str = ""
     innov3_config_path: str = ""
     innov3_checkpoint_path: str = ""
