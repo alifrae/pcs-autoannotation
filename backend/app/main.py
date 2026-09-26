@@ -23,6 +23,7 @@ from .core.database import init_db
 from .core.exceptions import AppError
 from .core.logging import setup_logging
 from .core.middleware import RequestTracingMiddleware
+from .autoannotation.pcs_native_runtime import inspect_pcs_native
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="VLM-AutoYOLO API",
+    title="PCS Auto-Annotation Companion API",
     version="0.1.0",
     lifespan=lifespan,
     default_response_class=JSONResponse,
@@ -124,7 +125,12 @@ app.include_router(video_router)
 
 @app.get("/api/health")
 async def health() -> dict:
-    return {"status": "ok", "version": "0.1.0"}
+    pcs_native = inspect_pcs_native()
+    return {
+        "status": "ok" if pcs_native.available else "degraded",
+        "version": "0.1.0",
+        "pcs_native": pcs_native.as_dict(),
+    }
 
 
 # Mount frontend conditionally (for single-container deployments)
