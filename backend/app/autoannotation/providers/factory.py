@@ -8,6 +8,7 @@ from ...core.config import Settings, settings
 from .camera_provider import LocateAnythingSam2Provider
 from .innov3_openpcdet_runtime import Innov3OpenPcdetRuntime
 from .innov3_provider import Innov3DsvtProvider
+from .innov3_subprocess_runtime import Innov3SubprocessRuntime
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +18,7 @@ class Innov3ConfigurationStatus:
     config_path: str | None
     checkpoint_path: str | None
     device: str
+    python_executable: str | None
     missing: tuple[str, ...]
 
     def as_dict(self) -> dict[str, Any]:
@@ -26,6 +28,7 @@ class Innov3ConfigurationStatus:
             "config_path": self.config_path,
             "checkpoint_path": self.checkpoint_path,
             "device": self.device,
+            "python_executable": self.python_executable,
             "missing": list(self.missing),
         }
 
@@ -46,6 +49,7 @@ def inspect_innov3_configuration(
         config_path=config.innov3_config_path or None,
         checkpoint_path=config.innov3_checkpoint_path or None,
         device=config.innov3_device,
+        python_executable=config.innov3_python or None,
         missing=tuple(missing),
     )
 
@@ -59,11 +63,22 @@ def create_innov3_provider(
             "Innov3 is not configured. Missing: " + ", ".join(status.missing)
         )
 
-    runtime = Innov3OpenPcdetRuntime(
-        config_pickle=Path(config.innov3_config_path),
-        checkpoint=Path(config.innov3_checkpoint_path),
-        dsvt_root=Path(config.innov3_dsvt_root),
-        device=config.innov3_device,
+    runtime = (
+        Innov3SubprocessRuntime(
+            python_executable=Path(config.innov3_python),
+            config_pickle=Path(config.innov3_config_path),
+            checkpoint=Path(config.innov3_checkpoint_path),
+            dsvt_root=Path(config.innov3_dsvt_root),
+            device=config.innov3_device,
+            timeout_seconds=config.innov3_timeout_seconds,
+        )
+        if config.innov3_python
+        else Innov3OpenPcdetRuntime(
+            config_pickle=Path(config.innov3_config_path),
+            checkpoint=Path(config.innov3_checkpoint_path),
+            dsvt_root=Path(config.innov3_dsvt_root),
+            device=config.innov3_device,
+        )
     )
     return Innov3DsvtProvider(runtime=runtime)
 
