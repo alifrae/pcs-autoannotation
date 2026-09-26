@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 from ...core.config import settings
-from ...services.locate_anything import detect_image
+from ...services.locate_anything import detect_image, unload_model
 from ...services.sam2_service import segment_image
 from ..contracts import (
     BoundingBox2D,
@@ -24,6 +24,7 @@ from ..contracts import (
 
 DetectImageFn = Callable[..., dict[str, Any]]
 SegmentImageFn = Callable[..., list[list[list[float]]]]
+UnloadFn = Callable[[], None]
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,10 @@ class LocateAnythingSam2Provider:
         *,
         use_sam2: bool = True,
         sam2_score_threshold: float = 0.0,
+        release_vlm_before_sam2: bool = False,
         detect_fn: DetectImageFn = detect_image,
         segment_fn: SegmentImageFn = segment_image,
+        unload_vlm_fn: UnloadFn = unload_model,
     ) -> None:
         normalized = tuple(category.strip() for category in categories if category.strip())
         if not normalized:
@@ -46,8 +49,10 @@ class LocateAnythingSam2Provider:
         self.categories = normalized
         self.use_sam2 = bool(use_sam2)
         self.sam2_score_threshold = float(sam2_score_threshold)
+        self.release_vlm_before_sam2 = bool(release_vlm_before_sam2)
         self._detect = detect_fn
         self._segment = segment_fn
+        self._unload_vlm = unload_vlm_fn
 
     @property
     def identity(self) -> ProviderIdentity:
@@ -74,6 +79,8 @@ class LocateAnythingSam2Provider:
             polygons: list[list[list[float]]] = []
             if self.use_sam2 and boxes:
                 try:
+                    if self.release_vlm_before_sam2:
+                        self._unload_vlm()
                     polygons = self._segment(
                         image,
                         boxes,
