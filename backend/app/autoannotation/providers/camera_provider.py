@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import logging
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -23,6 +24,8 @@ from ..contracts import (
 
 DetectImageFn = Callable[..., dict[str, Any]]
 SegmentImageFn = Callable[..., list[list[list[float]]]]
+
+logger = logging.getLogger(__name__)
 
 
 class LocateAnythingSam2Provider:
@@ -70,11 +73,17 @@ class LocateAnythingSam2Provider:
             boxes = _scale_boxes_to_original(result)
             polygons: list[list[list[float]]] = []
             if self.use_sam2 and boxes:
-                polygons = self._segment(
-                    image,
-                    boxes,
-                    score_threshold=self.sam2_score_threshold,
-                )
+                try:
+                    polygons = self._segment(
+                        image,
+                        boxes,
+                        score_threshold=self.sam2_score_threshold,
+                    )
+                except Exception:
+                    logger.exception(
+                        "SAM2 segmentation failed; keeping LocateAnything boxes"
+                    )
+                    polygons = []
 
             proposals: list[ObjectProposal] = []
             for index, box in enumerate(boxes):
