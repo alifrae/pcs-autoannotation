@@ -6,7 +6,9 @@ PCS Auto-Annotation exists to reduce the manual effort required to create
 trustworthy automotive 3D annotations.
 
 It is a **companion to Point Cloud Studio (PCS)**, not a replacement for PCS and
-not an independent sensor tool.
+not an independent sensor tool. The production/default service refuses to start
+when the PCS native dependency is unavailable. CI may explicitly disable this
+startup gate because the private/native artifact is not present there.
 
 PCS remains the central component and owns:
 
@@ -200,11 +202,33 @@ The provider must not contain DAT/IFSCAN handling.
 The exact checkpoint, preprocessing contract, class mapping and checkpoint
 SHA-256 must be recorded. No fine-tuning is part of the initial baseline.
 
-The input adapter is now implemented in
-`backend/app/autoannotation/providers/innov3_dsvt.py`. It pins the existing
-internal Innov3 contract and checkpoint SHA-256. The OpenPCDet/DSVT inference
-runtime is not yet connected, so Innov3 must not yet be reported as an executing
-annotation provider.
+The companion now contains:
+
+- `innov3_dsvt.py` — the frozen internal model-input contract;
+- `innov3_openpcdet_runtime.py` — lazy OpenPCDet/DSVT execution;
+- `innov3_provider.py` — conversion from model output back to PCS annotation
+  coordinates;
+- `providers/factory.py` — explicit runtime configuration.
+
+The trusted model configuration already exists in the internal reference at
+`internal-dsvt-reference/model_data/internal_config.pkl`. The checkpoint remains
+an external staged asset and is verified against SHA-256
+`bdb7779c879094b1479ed3169025ee8eb1a391ec4c9d3a6c7fd2e06b8eff6c1f`.
+
+Runtime configuration is explicit:
+
+```text
+INNOV3_DSVT_ROOT
+INNOV3_CONFIG_PATH
+INNOV3_CHECKPOINT_PATH
+INNOV3_DEVICE
+INNOV3_HOUSING_MERGED
+```
+
+There are no repository-specific workstation paths in the implementation. The
+`/api/v1/autoannotation/dat/innov3-proposals` endpoint runs the current DAT
+sample through PCS-native decode and then Innov3. A real workstation execution
+is still required before this branch is considered runtime-qualified.
 
 ## Camera–LiDAR association
 
@@ -282,9 +306,11 @@ annotation trustworthiness.
 - **Synchronized Sensor Sample — partially implemented.** LiDAR and camera are
   synchronized by native timestamps. ADMA remains blocked on the parallel PCS
   native extension.
-- **Innov3 DSVT LiDAR Proposals — input contract implemented.** The frozen
-  Innov3 preprocessing contract and checkpoint identity are present. The
-  OpenPCDet runtime is not connected yet.
+- **Innov3 DSVT LiDAR Proposals — runtime path implemented, qualification
+  pending.** The frozen preprocessing contract, checkpoint verification,
+  OpenPCDet runtime, provider and DAT-to-proposal endpoint are present. The path
+  still needs a real configured workstation run and PCS visual validation of
+  returned boxes.
 - **LocateAnything/SAM2 Camera Provider — existing engine available, companion
   adapter pending.**
 - **Camera–LiDAR Association — pending.**
