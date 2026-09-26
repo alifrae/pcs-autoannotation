@@ -18,7 +18,7 @@ from .api.routes.import_dataset import router as import_router
 from .api.routes.predict import router as predict_router
 from .api.routes.train import router as train_router
 from .api.routes.video import router as video_router
-from .autoannotation.pcs_native_runtime import inspect_pcs_native
+from .autoannotation.pcs_native_runtime import inspect_pcs_native, require_pcs_native
 from .core.config import settings
 from .core.database import init_db
 from .core.exceptions import AppError
@@ -35,6 +35,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
+    if settings.pcs_native_required:
+        require_pcs_native()
     init_db()
 
     # 清理上次意外中断的训练任务
