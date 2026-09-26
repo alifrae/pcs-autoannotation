@@ -41,15 +41,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          INFRA_DIR="$RUNNER_TEMP/lidar-lab-infra"
-          rm -rf "$INFRA_DIR"
-          git clone --depth 1 --branch "$LIDAR_LAB_CONFIG_REF"             "https://github.com/$LIDAR_LAB_REPOSITORY.git" "$INFRA_DIR"
 
-          set -a
-          source "$INFRA_DIR/configs/self-hosted-linux.env"
-          set +a
+          CONFIG_PATH_CATALOG="$HOME/.config/engineering-trace-catalog/config.toml"
+          test -f "$CONFIG_PATH_CATALOG"
 
-          TRACE_PATH="$TRACE_CATALOG_ROOT/$HIGHWAY_TRACE_REL"
+          TRACE_PATH="$(python3 - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          config_path = Path.home() / ".config" / "engineering-trace-catalog" / "config.toml"
+          with config_path.open("rb") as stream:
+              config = tomllib.load(stream)
+          catalog = config["catalog"]
+          root_env = str(catalog.get("root_env", "ENGINEERING_TRACE_CATALOG_ROOT"))
+          root_value = os.environ.get(root_env, "") or str(catalog.get("root", ""))
+          root = Path(os.path.expandvars(root_value)).expanduser()
+          if not root.is_absolute():
+              root = config_path.parent / root
+          manifest = root / str(catalog.get("manifest", "catalog.toml"))
+          with manifest.open("rb") as stream:
+              data = tomllib.load(stream)
+          entry = next(item for item in data["datasets"] if item["id"] == "highway-v1")
+          print((root / entry["path"]).resolve())
+          PY
+          )"
+
+          LIDAR_LAB_DATA_ROOT="/media/o-ralilou/Data/lidar-lab"
+          LIDAR_LAB_DSVT_ROOT="$LIDAR_LAB_DATA_ROOT/runtimes/DSVT"
           DECODER_PYTHON="$LIDAR_LAB_DATA_ROOT/runtime/decoder-cp312/bin/python"
           ML_PYTHON="$LIDAR_LAB_DATA_ROOT/runtime/dsvt-py311-cu124/bin/python"
           CONFIG_PATH="$LIDAR_LAB_DATA_ROOT/models/internal-dsvt/internal_config.pkl"
@@ -104,7 +123,7 @@ jobs:
             rm -rf "$PCS_SOURCE"
             git init "$PCS_SOURCE"
             git -C "$PCS_SOURCE" remote add origin "https://github.com/$PCS_REPOSITORY.git"
-            git -C "$PCS_SOURCE" fetch --depth 1 origin "$PCS_COMMIT"
+            git -C "$PCS_SOURCE" -c credential.helper= fetch --depth 1 origin "$PCS_COMMIT"
             git -C "$PCS_SOURCE" checkout --detach FETCH_HEAD
 
             python -m pip install --quiet --upgrade pip maturin
