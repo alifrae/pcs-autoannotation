@@ -366,3 +366,37 @@ The smoke also found that the runner's base Python environment does not yet
 contain `torch`, `transformers`, `sam2`, or a cached
 `nvidia/LocateAnything-3B` model. The camera provider code is present, but its
 real model execution remains a separate qualification gate.
+
+
+## v1 execution boundaries
+
+The v1 path now has explicit runtime boundaries rather than assuming one Python
+environment can host every model:
+
+- the FastAPI/camera runtime stays on Python 3.12;
+- PCS native is installed as the Qt-free headless wheel and remains the
+  authority for DAT/IFSCAN/camera/ADMA interpretation;
+- Innov3 may run through `Innov3SubprocessRuntime` in its separately qualified
+  Python 3.11 + CUDA/OpenPCDet environment;
+- LocateAnything and SAM2 remain camera evidence providers. On constrained GPUs
+  the provider can release the VLM before loading SAM2 instead of requiring
+  both model allocations to coexist.
+
+Camera/LiDAR association is deterministic and calibration-gated. The companion
+accepts PCS calibration-input sidecars or PCS overlay-session calibration,
+projects canonical PCS LiDAR boxes with the PCS LiDAR-to-camera transform, and
+uses class-compatible 2D IoU for one-to-one association. Missing, unverified,
+distorted, or image-size-incompatible calibration fails closed.
+
+The review boundary is the PCS-owned `pcs.scene_objects` schema version 1.
+The companion emits immutable 3D hypotheses in the canonical PCS box
+convention; PCS owns accept/correct/reject and manual-object editing. Reviewed
+documents can be read back by the companion to compute baseline review and
+human-effort metrics without changing the original machine proposal.
+
+`backend/scripts/qualify_autoannotation_v1.py` is the common qualification
+entry point for workstation CI and later deployment automation. The
+self-hosted v1 workflow provisions a persistent camera-model environment,
+reuses the exact PCS native contract, invokes Innov3 through its qualified
+runtime, discovers a verified real PCS calibration, and writes a proposed PCS
+scene-object document plus evidence artifacts.
