@@ -10,6 +10,8 @@ import numpy as np
 from .contracts import AdmaSample, CameraFrame, LidarFrame, SynchronizedSample
 from .pcs_native_runtime import PcsNativeUnavailable, require_pcs_native
 
+DEFAULT_ADMA_SYNC_TOLERANCE_NS = 20_000_000
+
 
 @dataclass(frozen=True, slots=True)
 class DatStream:
@@ -156,28 +158,39 @@ class PcsNativeDatSource:
             metadata=metadata,
         )
 
-    def get_adma_sample_nearest(
+    def get_adma_sample_at(
         self,
         timestamp_ns: int,
         *,
         stream_name: str | None = None,
+        tolerance_ns: int = DEFAULT_ADMA_SYNC_TOLERANCE_NS,
     ) -> AdmaSample:
+        if tolerance_ns < 0:
+            raise ValueError("ADMA synchronization tolerance must be non-negative")
+
         selected = stream_name or self._single_stream_name("adma")
         source = self.transport.NativeDatAdmaStreamSource(
             str(self.path),
             selected_stream_name=selected,
         )
-        nearest = source.get_nearest_sample(int(timestamp_ns))
-        if nearest is None:
+        lookup = source.get_sample_at(int(timestamp_ns), int(tolerance_ns))
+        status = str(lookup.get("status") or "")
+        raw_sample = lookup.get("sample")
+        if status not in {"exact", "nearest"} or raw_sample is None:
+            delta_ns = lookup.get("delta_ns")
             raise LookupError(
-                f"No ADMA sample found near {timestamp_ns} ns in stream {selected!r}"
+                f"ADMA synchronization failed for {timestamp_ns} ns in "
+                f"stream {selected!r}: status={status!r}, delta_ns={delta_ns!r}, "
+                f"tolerance_ns={tolerance_ns}"
             )
 
-        raw = dict(nearest["sample"])
+        raw = dict(raw_sample)
         metadata = {
             "stream_name": selected,
             "sample_index": int(raw["index"]),
-            "sync_delta_ns": int(nearest["delta_ns"]),
+            "sync_status": status,
+            "sync_delta_ns": int(lookup["delta_ns"]),
+            "sync_tolerance_ns": int(tolerance_ns),
             "chunk_timestamp_ns": int(raw["chunk_timestamp_ns"]),
             "schema": str(raw.get("schema") or ""),
             "source": "point_cloud_studio_native",
@@ -206,6 +219,7 @@ class PcsNativeDatSource:
         lidar_stream_name: str | None = None,
         camera_stream_name: str | None = None,
         adma_stream_name: str | None = None,
+        adma_tolerance_ns: int = DEFAULT_ADMA_SYNC_TOLERANCE_NS,
         require_adma: bool = True,
     ) -> SynchronizedSample:
         lidar = self.decode_lidar_frame(lidar_index, stream_name=lidar_stream_name)
@@ -214,9 +228,10 @@ class PcsNativeDatSource:
             stream_name=camera_stream_name,
         )
         adma = (
-            self.get_adma_sample_nearest(
+            self.get_adma_sample_at(
                 lidar.timestamp_ns,
                 stream_name=adma_stream_name,
+                tolerance_ns=adma_tolerance_ns,
             )
             if require_adma
             else None
@@ -246,6 +261,9 @@ class PcsNativeDatSource:
                 "adma_stream_name": selected_adma_stream or None,
                 "adma_sync_delta_ns": (
                     None if adma is None else adma.metadata.get("sync_delta_ns")
+                ),
+                "adma_sync_tolerance_ns": (
+                    None if adma is None else adma.metadata.get("sync_tolerance_ns")
                 ),
                 "adma_status": "matched" if adma is not None else "not_requested",
             },
