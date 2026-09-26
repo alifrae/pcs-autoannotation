@@ -106,7 +106,9 @@ def dat_sample_summary(request: DatSampleSummaryRequest) -> dict:
             if sample.adma is None
             else {
                 "timestamp_ns": sample.adma.timestamp_ns,
+                "sync_status": sample.adma.metadata.get("sync_status"),
                 "sync_delta_ns": sample.adma.metadata.get("sync_delta_ns"),
+                "sync_tolerance_ns": sample.adma.metadata.get("sync_tolerance_ns"),
                 "sample_index": sample.adma.metadata.get("sample_index"),
                 "stream_name": sample.adma.metadata.get("stream_name"),
                 "values": dict(sample.adma.values),
@@ -196,7 +198,7 @@ def dat_camera_proposals(request: DatInnov3Request) -> dict:
         proposals = provider.infer(sample)
     except FileNotFoundError as exc:
         raise AppError(str(exc), 404) from exc
-    except (PcsNativeUnavailable, PcsNativeCapabilityError) as exc:
+    except PcsNativeUnavailable as exc:
         raise AppError(str(exc), 503) from exc
     except RuntimeError as exc:
         raise AppError(str(exc), 503) from exc
