@@ -356,14 +356,29 @@ interface PcsDatRequest {
 }
 
 export async function inspectPcsDat(path: string): Promise<PcsDatInspection> {
-  const { data } = await request.post<PcsDatInspection>("/autoannotation/dat/inspect", { path });
-  return data;
+  const { data } = await request.post("/autoannotation/dat/inspect", { path });
+  return {
+    path: data.path,
+    streams: (data.streams ?? []).map((stream: Record<string, unknown>) => ({
+      name: String(stream.name ?? ""),
+      streamId: Number(stream.stream_id ?? 0),
+      kind: String(stream.kind ?? "unknown"),
+      frameCount: Number(stream.frame_count ?? 0),
+      width: stream.width == null ? null : Number(stream.width),
+      height: stream.height == null ? null : Number(stream.height),
+      fps: stream.fps == null ? null : Number(stream.fps),
+    })),
+    lidarStreams: data.lidar_streams ?? [],
+    cameraStreams: data.camera_streams ?? [],
+    admaStreams: data.adma_streams ?? [],
+    admaNativeApi: data.adma_native_api === true,
+  };
 }
 
 export async function fetchPcsDatSample(
   params: PcsDatRequest,
 ): Promise<PcsDatSampleSummary> {
-  const { data } = await request.post<PcsDatSampleSummary>(
+  const { data } = await request.post(
     "/autoannotation/dat/sample-summary",
     {
       path: params.path,
@@ -375,7 +390,33 @@ export async function fetchPcsDatSample(
     },
     { timeout: DETECT_TIMEOUT },
   );
-  return data;
+  return {
+    sampleId: data.sample_id,
+    timestampNs: data.timestamp_ns,
+    lidar: {
+      pointCount: data.lidar.point_count,
+      attributes: data.lidar.attributes ?? [],
+      metadata: data.lidar.metadata ?? {},
+    },
+    camera: {
+      timestampNs: data.camera.timestamp_ns,
+      width: data.camera.width,
+      height: data.camera.height,
+      encoding: data.camera.encoding,
+      sourceId: data.camera.source_id,
+      syncDeltaNs: data.camera.sync_delta_ns ?? null,
+    },
+    adma: data.adma == null ? null : {
+      timestampNs: data.adma.timestamp_ns,
+      syncStatus: data.adma.sync_status ?? null,
+      syncDeltaNs: data.adma.sync_delta_ns ?? null,
+      syncToleranceNs: data.adma.sync_tolerance_ns ?? null,
+      sampleIndex: data.adma.sample_index ?? null,
+      streamName: data.adma.stream_name ?? null,
+      values: data.adma.values ?? {},
+    },
+    sourceMetadata: data.source_metadata ?? {},
+  };
 }
 
 export async function fetchPcsDatCameraFrame(
@@ -398,7 +439,7 @@ export async function fetchPcsDatCameraFrame(
 export async function fetchPcsDatInnov3Proposals(
   params: PcsDatRequest,
 ): Promise<PcsInnov3ProposalResult> {
-  const { data } = await request.post<PcsInnov3ProposalResult>(
+  const { data } = await request.post(
     "/autoannotation/dat/innov3-proposals",
     {
       path: params.path,
@@ -409,7 +450,26 @@ export async function fetchPcsDatInnov3Proposals(
     },
     { timeout: DETECT_TIMEOUT },
   );
-  return data;
+  return {
+    sampleId: data.sample_id,
+    timestampNs: data.timestamp_ns,
+    provider: data.provider,
+    proposals: (data.proposals ?? []).map((proposal: any) => ({
+      proposalId: proposal.proposal_id,
+      className: proposal.class_name,
+      bbox3d: proposal.bbox_3d == null ? null : {
+        centerX: proposal.bbox_3d.center_x,
+        centerY: proposal.bbox_3d.center_y,
+        centerZ: proposal.bbox_3d.center_z,
+        length: proposal.bbox_3d.length,
+        width: proposal.bbox_3d.width,
+        height: proposal.bbox_3d.height,
+        yawRad: proposal.bbox_3d.yaw_rad,
+      },
+      confidence: proposal.confidence ?? null,
+      evidence: proposal.evidence ?? [],
+    })),
+  };
 }
 
 export async function fetchPcsDatCameraProposals(
@@ -419,7 +479,7 @@ export async function fetchPcsDatCameraProposals(
     sam2ScoreThreshold: number;
   },
 ): Promise<PcsCameraProposalResult> {
-  const { data } = await request.post<PcsCameraProposalResult>(
+  const { data } = await request.post(
     "/autoannotation/dat/camera-proposals",
     {
       path: params.path,
@@ -433,5 +493,23 @@ export async function fetchPcsDatCameraProposals(
     },
     { timeout: DETECT_TIMEOUT },
   );
-  return data;
+  return {
+    sampleId: data.sample_id,
+    timestampNs: data.timestamp_ns,
+    cameraTimestampNs: data.camera_timestamp_ns,
+    provider: data.provider,
+    proposals: (data.proposals ?? []).map((proposal: any) => ({
+      proposalId: proposal.proposal_id,
+      className: proposal.class_name,
+      bbox2d: proposal.bbox_2d == null ? null : {
+        x1: proposal.bbox_2d.x1,
+        y1: proposal.bbox_2d.y1,
+        x2: proposal.bbox_2d.x2,
+        y2: proposal.bbox_2d.y2,
+      },
+      maskPolygon: proposal.mask_polygon ?? null,
+      confidence: proposal.confidence ?? null,
+      evidence: proposal.evidence ?? [],
+    })),
+  };
 }
