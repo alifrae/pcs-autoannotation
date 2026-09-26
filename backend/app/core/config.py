@@ -43,7 +43,6 @@ class Settings(BaseSettings):
     innov3_config_path: str = ""
     innov3_checkpoint_path: str = ""
     innov3_device: str = "cuda"
-    innov3_housing_merged: bool | None = None
 
     @property
     def resolved_device(self) -> str:
