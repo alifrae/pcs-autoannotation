@@ -8,6 +8,11 @@ from typing import Any
 import numpy as np
 
 from .contracts import AdmaSample, CameraFrame, LidarFrame, SynchronizedSample
+from .pcs_native_lidar import (
+    decode_point_cloud_payload,
+    extract_ifscan10_session,
+    is_ifscan10_payload,
+)
 from .pcs_native_runtime import PcsNativeUnavailableError, require_pcs_native
 
 DEFAULT_ADMA_SYNC_TOLERANCE_NS = 20_000_000
@@ -59,6 +64,7 @@ class PcsNativeDatSource:
         self.transport = self.native.transport
         self.codec = self.native.codec
         self._streams = self._read_streams()
+        self._ifscan10_sessions: dict[str, Any] = {}
 
     @property
     def streams(self) -> tuple[DatStream, ...]:
@@ -90,40 +96,27 @@ class PcsNativeDatSource:
             probe_only=False,
         )
         payload, timestamp_us = reader.get_payload_by_index(int(index))
-        decoded = self.codec.decode_ifscan_payload(payload)
 
-        attributes: dict[str, np.ndarray] = {}
-        for name in (
-            "range",
-            "intensity",
-            "reflectivity",
-            "inferred_reflectivity",
-            "slot_index",
-            "layer_index",
-            "echo_index",
-            "peak",
-            "width",
-            "peak_width",
-            "flags",
-        ):
-            value = getattr(decoded, name, None)
-            if value is not None:
-                attributes[name] = np.asarray(value)
+        session = self._ifscan10_sessions.get(selected)
+        if is_ifscan10_payload(self.native, payload) and session is None:
+            first_payload, _ = reader.get_payload_by_index(0)
+            session = extract_ifscan10_session(self.native, first_payload)
+            self._ifscan10_sessions[selected] = session
 
+        points, attributes, decoded_metadata = decode_point_cloud_payload(
+            self.native,
+            payload,
+            ifscan10_session=session,
+        )
         metadata = {
             "source": "point_cloud_studio_native",
             "stream_name": selected,
             "frame_index": int(index),
-            "ifscan_version": getattr(decoded, "ifscan_version", None),
-            "structure_kind": getattr(decoded, "structure_kind", None),
-            "num_slots": getattr(decoded, "num_slots", None),
-            "num_layers": getattr(decoded, "num_layers", None),
-            "num_echoes": getattr(decoded, "num_echoes", None),
-            "valid_count": getattr(decoded, "valid_count", None),
+            **decoded_metadata,
         }
         return LidarFrame(
             timestamp_ns=int(timestamp_us) * 1000,
-            points=np.asarray(decoded.points, dtype=np.float32),
+            points=np.ascontiguousarray(points, dtype=np.float32),
             attributes=attributes,
             metadata=metadata,
         )
