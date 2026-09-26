@@ -35,9 +35,10 @@ def test_innov3_input_reproduces_reference_projection() -> None:
             "slot_index": np.asarray([4, 2, 1, 0], dtype=np.int32),
             "layer_index": np.asarray([1, 0, 0, 0], dtype=np.int32),
         },
+        metadata={"housing_merged": True},
     )
 
-    prepared = prepare_innov3_input(frame, housing_merged=True)
+    prepared = prepare_innov3_input(frame)
 
     assert prepared.semantic_echo_id == 2
     assert prepared.source_indices.tolist() == [1, 0]
@@ -56,9 +57,10 @@ def test_innov3_external_echo_mapping_without_housing_merge() -> None:
             "slot_index": np.asarray([0], dtype=np.int32),
             "layer_index": np.asarray([0], dtype=np.int32),
         },
+        metadata={"housing_merged": False},
     )
 
-    prepared = prepare_innov3_input(frame, housing_merged=False)
+    prepared = prepare_innov3_input(frame)
 
     assert prepared.semantic_echo_id == 1
     assert prepared.source_indices.tolist() == [0]
