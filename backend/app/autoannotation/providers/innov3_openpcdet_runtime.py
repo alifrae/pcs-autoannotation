@@ -6,7 +6,8 @@ import sys
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterator, Mapping
+from collections.abc import Iterator, Mapping
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -179,7 +180,7 @@ class Innov3OpenPcdetRuntime:
 
 
 def _sample_seed(sample_id: str) -> int:
-    payload = f"dsvt-internal-innov3\0{sample_id}".encode("utf-8")
+    payload = f"dsvt-internal-innov3\0{sample_id}".encode()
     return int.from_bytes(hashlib.sha256(payload).digest()[:4], "big")
 
 
