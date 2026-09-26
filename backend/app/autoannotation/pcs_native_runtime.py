@@ -59,7 +59,7 @@ def inspect_pcs_native(native: ModuleType | Any | None = None) -> PcsNativeStatu
             transport and hasattr(transport, "NativeDatAdmaStreamSource")
         )
         return PcsNativeStatus(
-            available=dat_reader and dat_image_source and ifscan_decoder,
+            available=dat_reader and dat_image_source and ifscan_decoder and adma_source,
             version=str(getattr(module, "__version__", "")) or None,
             build_profile=str(getattr(module, "__build_profile__", "")) or None,
             features=tuple(str(v) for v in getattr(module, "__build_features__", ())),
@@ -91,6 +91,7 @@ def require_pcs_native(native: ModuleType | Any | None = None) -> ModuleType | A
             for name, present in (
                 ("transport.NativeDatReader", status.dat_reader),
                 ("transport.NativeDatImageStreamSource", status.dat_image_source),
+                ("transport.NativeDatAdmaStreamSource", status.adma_source),
                 ("codec.decode_ifscan_payload", status.ifscan_decoder),
             )
             if not present
