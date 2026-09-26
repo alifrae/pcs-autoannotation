@@ -34,6 +34,9 @@ class Settings(BaseSettings):
 
     # PCS Auto-Annotation companion
     pcs_native_required: bool = True
+    autoannotation_camera_categories: list[str] = ["car", "truck"]
+    autoannotation_camera_use_sam2: bool = True
+    autoannotation_sam2_score_threshold: float = 0.0
 
     # Innov3 DSVT
     innov3_dsvt_root: str = ""
