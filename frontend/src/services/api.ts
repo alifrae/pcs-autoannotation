@@ -343,3 +343,95 @@ export async function fetchImportProgress(importId: string): Promise<ImportProgr
 export async function cancelImport(importId: string): Promise<void> {
   await request.post(`/datasets/import/${importId}/cancel`);
 }
+
+
+// ── PCS DAT Companion ────────────────────────────
+
+interface PcsDatRequest {
+  path: string;
+  lidarIndex: number;
+  lidarStreamName?: string | null;
+  cameraStreamName?: string | null;
+  admaStreamName?: string | null;
+}
+
+export async function inspectPcsDat(path: string): Promise<PcsDatInspection> {
+  const { data } = await request.post<PcsDatInspection>("/autoannotation/dat/inspect", { path });
+  return data;
+}
+
+export async function fetchPcsDatSample(
+  params: PcsDatRequest,
+): Promise<PcsDatSampleSummary> {
+  const { data } = await request.post<PcsDatSampleSummary>(
+    "/autoannotation/dat/sample-summary",
+    {
+      path: params.path,
+      lidar_index: params.lidarIndex,
+      lidar_stream_name: params.lidarStreamName ?? null,
+      camera_stream_name: params.cameraStreamName ?? null,
+      adma_stream_name: params.admaStreamName ?? null,
+      require_adma: true,
+    },
+    { timeout: DETECT_TIMEOUT },
+  );
+  return data;
+}
+
+export async function fetchPcsDatCameraFrame(
+  params: PcsDatRequest,
+): Promise<Blob> {
+  const { data } = await request.post(
+    "/autoannotation/dat/camera-frame",
+    {
+      path: params.path,
+      lidar_index: params.lidarIndex,
+      lidar_stream_name: params.lidarStreamName ?? null,
+      camera_stream_name: params.cameraStreamName ?? null,
+      adma_stream_name: params.admaStreamName ?? null,
+    },
+    { responseType: "blob", timeout: DETECT_TIMEOUT },
+  );
+  return data;
+}
+
+export async function fetchPcsDatInnov3Proposals(
+  params: PcsDatRequest,
+): Promise<PcsInnov3ProposalResult> {
+  const { data } = await request.post<PcsInnov3ProposalResult>(
+    "/autoannotation/dat/innov3-proposals",
+    {
+      path: params.path,
+      lidar_index: params.lidarIndex,
+      lidar_stream_name: params.lidarStreamName ?? null,
+      camera_stream_name: params.cameraStreamName ?? null,
+      adma_stream_name: params.admaStreamName ?? null,
+    },
+    { timeout: DETECT_TIMEOUT },
+  );
+  return data;
+}
+
+export async function fetchPcsDatCameraProposals(
+  params: PcsDatRequest & {
+    categories: string[];
+    useSam2: boolean;
+    sam2ScoreThreshold: number;
+  },
+): Promise<PcsCameraProposalResult> {
+  const { data } = await request.post<PcsCameraProposalResult>(
+    "/autoannotation/dat/camera-proposals",
+    {
+      path: params.path,
+      lidar_index: params.lidarIndex,
+      lidar_stream_name: params.lidarStreamName ?? null,
+      camera_stream_name: params.cameraStreamName ?? null,
+      adma_stream_name: params.admaStreamName ?? null,
+      categories: params.categories,
+      use_sam2: params.useSam2,
+      sam2_score_threshold: params.sam2ScoreThreshold,
+    },
+    { timeout: DETECT_TIMEOUT },
+  );
+  return data;
+}
