@@ -1,4 +1,20 @@
-# VLM-AutoYOLO
+# PCS Auto-Annotation Companion
+
+> This fork is an experimental auto-annotation companion for Point Cloud Studio.
+> PCS remains the central authority for sensor decoding, synchronization semantics,
+> calibration and LiDAR inspection. DAT workflows in this repository depend on
+> the versioned `point_cloud_studio_native` headless wheel; this repository does
+> not implement a parallel DAT/IFSCAN/camera/ADMA decoder.
+>
+> Current architecture: [PCS Auto-Annotation Companion — Architecture and Baseline](docs/pcs_autoannotation_companion_architecture.md)
+>
+> The current north star is **auto-annotation**. Real2Sim is intentionally outside
+> the present scope, while the annotation contracts remain suitable for future
+> downstream reuse.
+
+---
+
+## Upstream: VLM-AutoYOLO
 
 [简体中文](README_ZH.md) | English
 
