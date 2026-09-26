@@ -7,12 +7,8 @@ from typing import Any
 
 import numpy as np
 
-from .contracts import CameraFrame, LidarFrame, SynchronizedSample
+from .contracts import AdmaSample, CameraFrame, LidarFrame, SynchronizedSample
 from .pcs_native_runtime import PcsNativeUnavailable, require_pcs_native
-
-
-class PcsNativeCapabilityError(RuntimeError):
-    """Raised when a required capability has not yet been exposed by PCS native."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,11 +65,7 @@ class PcsNativeDatSource:
     def inspect(self) -> DatInspection:
         lidar = tuple(stream.name for stream in self._streams if stream.kind == "point_cloud")
         camera = tuple(stream.name for stream in self._streams if stream.kind == "image")
-        adma = tuple(
-            stream.name
-            for stream in self._streams
-            if stream.kind == "adma" or "adma" in stream.name.lower()
-        )
+        adma = tuple(stream.name for stream in self._streams if stream.kind == "adma")
         return DatInspection(
             path=str(self.path),
             streams=self._streams,
@@ -164,12 +156,56 @@ class PcsNativeDatSource:
             metadata=metadata,
         )
 
+    def get_adma_sample_nearest(
+        self,
+        timestamp_ns: int,
+        *,
+        stream_name: str | None = None,
+    ) -> AdmaSample:
+        selected = stream_name or self._single_stream_name("adma")
+        source = self.transport.NativeDatAdmaStreamSource(
+            str(self.path),
+            selected_stream_name=selected,
+        )
+        nearest = source.get_nearest_sample(int(timestamp_ns))
+        if nearest is None:
+            raise LookupError(
+                f"No ADMA sample found near {timestamp_ns} ns in stream {selected!r}"
+            )
+
+        raw = dict(nearest["sample"])
+        metadata = {
+            "stream_name": selected,
+            "sample_index": int(raw["index"]),
+            "sync_delta_ns": int(nearest["delta_ns"]),
+            "chunk_timestamp_ns": int(raw["chunk_timestamp_ns"]),
+            "schema": str(raw.get("schema") or ""),
+            "source": "point_cloud_studio_native",
+        }
+        values = {
+            key: value
+            for key, value in raw.items()
+            if key
+            not in {
+                "index",
+                "timestamp_ns",
+                "dat_timestamp_ns",
+                "chunk_timestamp_ns",
+            }
+        }
+        return AdmaSample(
+            timestamp_ns=int(raw["timestamp_ns"]),
+            values=values,
+            metadata=metadata,
+        )
+
     def build_synchronized_sample(
         self,
         lidar_index: int,
         *,
         lidar_stream_name: str | None = None,
         camera_stream_name: str | None = None,
+        adma_stream_name: str | None = None,
         require_adma: bool = True,
     ) -> SynchronizedSample:
         lidar = self.decode_lidar_frame(lidar_index, stream_name=lidar_stream_name)
@@ -177,18 +213,23 @@ class PcsNativeDatSource:
             lidar.timestamp_ns,
             stream_name=camera_stream_name,
         )
-        if require_adma:
-            raise PcsNativeCapabilityError(
-                "ADMA synchronization is not available until Point Cloud Studio "
-                "exposes NativeDatAdmaStreamSource in point_cloud_studio_native. "
-                "No local ADMA parser is permitted in pcs-autoannotation."
+        adma = (
+            self.get_adma_sample_nearest(
+                lidar.timestamp_ns,
+                stream_name=adma_stream_name,
             )
+            if require_adma
+            else None
+        )
 
         selected_lidar_stream = str(lidar.metadata.get("stream_name") or "")
         selected_camera_stream = str(camera.metadata.get("stream_name") or "")
+        selected_adma_stream = (
+            "" if adma is None else str(adma.metadata.get("stream_name") or "")
+        )
         sample_seed = (
             f"{self.path.resolve()}|{lidar.timestamp_ns}|"
-            f"{selected_lidar_stream}|{selected_camera_stream}"
+            f"{selected_lidar_stream}|{selected_camera_stream}|{selected_adma_stream}"
         )
         sample_id = hashlib.sha256(sample_seed.encode("utf-8")).hexdigest()[:24]
         return SynchronizedSample(
@@ -196,13 +237,17 @@ class PcsNativeDatSource:
             timestamp_ns=lidar.timestamp_ns,
             lidar=lidar,
             camera=camera,
-            adma=None,
+            adma=adma,
             source_metadata={
                 "dat_path": str(self.path),
                 "authority": "point_cloud_studio_native",
                 "lidar_stream_name": selected_lidar_stream,
                 "camera_stream_name": selected_camera_stream,
-                "adma_status": "waiting_for_pcs_native_api",
+                "adma_stream_name": selected_adma_stream or None,
+                "adma_sync_delta_ns": (
+                    None if adma is None else adma.metadata.get("sync_delta_ns")
+                ),
+                "adma_status": "matched" if adma is not None else "not_requested",
             },
         )
 
