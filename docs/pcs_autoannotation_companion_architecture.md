@@ -162,7 +162,17 @@ The generic provider boundary is:
 AnnotationProvider
   identity
   infer(SynchronizedSample) -> ObjectProposal[]
+
+BatchAnnotationProvider (optional capability)
+  identity
+  infer_batch(SynchronizedSample[]) -> ObjectProposal[][]
 ```
+
+Batching is deliberately optional. Shared orchestration uses
+`providers.batching.infer_samples()`: a provider with an optimized
+`infer_batch()` path is called once, while every existing provider remains
+valid through deterministic single-sample fallback. This avoids introducing a
+second model engine purely for batch execution.
 
 Every machine proposal records provider identity and evidence. Model code must
 not know how DAT or IFSCAN is encoded.
@@ -269,11 +279,26 @@ The companion should hand PCS:
 Human decisions are stored separately as:
 
 ```text
-proposed → accepted | modified | rejected
+ObjectProposal (immutable machine output)
+        │
+        └── ProposalReview
+              ├── accepted
+              ├── modified ──► AnnotationRevision
+              └── rejected
 ```
 
-The original machine proposal remains immutable so model quality and correction
-effort can be measured later.
+`ObjectProposal` carries no review state. `ProposalReview` references the
+original `proposal_id` and `sample_id`. A modified decision contains a complete
+`AnnotationRevision`; accepted and rejected decisions cannot contain one. The
+`resolve_reviewed_annotation()` helper derives final annotation state without
+changing the proposal.
+
+This branch establishes the domain contract and validation boundary. Durable
+storage remains part of the PCS review/bridge implementation rather than adding
+an independent ad-hoc persistence path in the companion.
+
+The original machine proposal therefore remains immutable so model quality,
+acceptance rate, and correction effort can be measured later.
 
 ## Auto-annotation baseline qualification
 
@@ -323,7 +348,9 @@ annotation trustworthiness.
   LocateAnything/SAM2 produces 2D proposals, and a DAT-to-camera-proposal
   endpoint is present. Real-DAT/model qualification remains pending.
 - **Camera–LiDAR Association — pending.**
-- **PCS Review and Correction — pending.**
+- **PCS Review and Correction — domain contract implemented, bridge/persistence pending.**
+  Machine proposals are immutable; separate accepted/modified/rejected review
+  records and complete correction revisions are defined and validated.
 - **Auto-Annotation Baseline Qualification — pending.**
 
 These explicit capability names are the tracking vocabulary for this repository.
